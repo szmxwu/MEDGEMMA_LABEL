@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title data-i18n="app_title">DICOM Processing System</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="{{ url_for('static', filename='css/bootstrap.min.css') }}" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link href="{{ url_for('static', filename='css/all.min.css') }}" rel="stylesheet">
+    <!-- 自定义样式 -->
+    <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
+    <!-- styles moved to static/css/style.css -->
+</head>
+<body>
+    <!-- 顶部导航 -->
+    <nav class="navbar navbar-dark bg-primary mb-4">
+        <div class="container-fluid">
+            <span class="navbar-brand mb-0 h1">
+                <i class="fas fa-hospital"></i> <span data-i18n="app_title">DICOM Processing System</span>
+            </span>
+            <div class="d-flex align-items-center">
+                <div class="dropdown me-3">
+                    <button class="btn btn-outline-light btn-sm dropdown-toggle" type="button" id="languageDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="fas fa-globe"></i> <span id="currentLang">English</span>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="languageDropdown">
+                        <li><a class="dropdown-item" href="#" onclick="processor.setLanguage('en')">English</a></li>
+                        <li><a class="dropdown-item" href="#" onclick="processor.setLanguage('zh')">中文</a></li>
+                    </ul>
+                </div>
+                <span class="badge bg-success me-2" id="systemStatus">
+                    <i class="fas fa-circle"></i> <span data-i18n="system_normal">System Normal</span>
+                </span>
+                <span class="text-white-50" id="currentTime"></span>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid">
+        <div class="row">
+            <!-- 主内容区域 -->
+            <div class="col-lg-8 col-xl-9">
+                <!-- 处理选项卡 -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <ul class="nav nav-tabs card-header-tabs" id="processTabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="single-tab" data-bs-toggle="tab" 
+                                        data-bs-target="#single-pane" type="button" role="tab">
+                                    <i class="fas fa-file-medical"></i> <span data-i18n="single_process">Single Process</span>
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="batch-tab" data-bs-toggle="tab" 
+                                        data-bs-target="#batch-pane" type="button" role="tab">
+                                    <i class="fas fa-layer-group"></i> <span data-i18n="batch_process">Batch Process</span>
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="upload-tab" data-bs-toggle="tab" 
+                                        data-bs-target="#upload-pane" type="button" role="tab">
+                                    <i class="fas fa-upload"></i> <span data-i18n="file_upload">File Upload</span>
+                                </button>
+                            </li>
+                        </ul>
+                    </div>
+                    
+                    <div class="card-body">
+                        <div class="tab-content" id="processTabContent">
+                            <!-- 单个处理 -->
+                            <div class="tab-pane fade show active" id="single-pane" role="tabpanel">
+                                <div class="row">
+                                    <div class="col-md-8">
+                                        <h5 class="mb-3">
+                                            <i class="fas fa-search text-primary"></i> <span data-i18n="single_study_process">Single Study Process</span>
+                                        </h5>
+                                        <div class="mb-3">
+                                            <label for="accessionNumber" class="form-label" data-i18n="accession_number">AccessionNumber</label>
+                                            <div class="input-group">
+                                                <span class="input-group-text">
+                                                    <i class="fas fa-barcode"></i>
+                                                </span>
+                                                <input type="text" class="form-control" id="accessionNumber" 
+                                                       placeholder="e.g.: M25053000056" maxlength="50">
+                                                <button class="btn btn-outline-secondary" type="button" 
+                                                        onclick="clearInput('accessionNumber')">
+                                                    <i class="fas fa-times"></i>
+                                                </button>
+                                            </div>
+                                            <div class="form-text" data-i18n="enter_accession_number">Please enter the AccessionNumber of the study to process</div>
+                                        </div>
+                                        <button type="button" class="btn btn-primary btn-lg" onclick="startSingleProcess()">
+                                            <i class="fas fa-play"></i> <span data-i18n="start_process">Start Process</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 批量处理 -->
+                            <div class="tab-pane fade" id="batch-pane" role="tabpanel">
+                                <div class="row">
+                                    <div class="col-md-8">
+                                        <h5 class="mb-3">
+                                            <i class="fas fa-list text-primary"></i> <span data-i18n="batch_study_process">Batch Study Process</span>
+                                        </h5>
+                                        <div class="mb-3">
+                                            <label for="batchAccessionNumbers" class="form-label" data-i18n="accession_number_list">AccessionNumber List</label>
+                                            <textarea class="form-control" id="batchAccessionNumbers" rows="6" 
+                                                     placeholder="Enter one AccessionNumber per line, e.g.:&#10;M25053000056&#10;M25053000057&#10;M25053000058"></textarea>
+                                            <div class="form-text" data-i18n="batch_input_help">Enter one AccessionNumber per line, the system will process them sequentially</div>
+                                        </div>
+                                        <div class="d-flex gap-2">
+                                            <button type="button" class="btn btn-primary btn-lg" onclick="startBatchProcess()">
+                                                <i class="fas fa-play"></i> <span data-i18n="start_batch_process">Start Batch Process</span>
+                                            </button>
+                                            <button type="button" class="btn btn-outline-secondary" onclick="clearInput('batchAccessionNumbers')">
+                                                <i class="fas fa-eraser"></i> <span data-i18n="clear">Clear</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 文件上传 -->
+                            <div class="tab-pane fade" id="upload-pane" role="tabpanel">
+                                <div class="row">
+                                    <div class="col-md-8">
+                                        <h5 class="mb-3">
+                                            <i class="fas fa-cloud-upload-alt text-primary"></i> <span data-i18n="upload_zip_process">Upload ZIP File Process</span>
+                                        </h5>
+                                        <div class="mb-3">
+                                            <label for="zipFile" class="form-label" data-i18n="select_dicom_zip">Select DICOM ZIP File</label>
+                                            <div class="upload-area" id="uploadArea" onclick="document.getElementById('zipFile').click()">
+                                                <div class="upload-content">
+                                                    <i class="fas fa-cloud-upload-alt fa-3x text-muted mb-3"></i>
+                                                    <h6 class="text-muted" data-i18n="click_or_drag">Click to select file or drag here</h6>
+                                                    <p class="text-muted small mb-0" data-i18n="support_zip">Supports .zip format, max 500MB</p>
+                                                </div>
+                                                <input type="file" class="d-none" id="zipFile" accept=".zip" onchange="handleFileSelect(this)">
+                                            </div>
+                                        </div>
+                                        <div id="selectedFile" class="mb-3" style="display: none;">
+                                            <div class="alert alert-info d-flex align-items-center">
+                                                <i class="fas fa-file-archive me-2"></i>
+                                                <div class="flex-grow-1">
+                                                    <strong data-i18n="selected_file">Selected File:</strong> <span id="fileName"></span>
+                                                    <br><small class="text-muted"><span data-i18n="file_size">Size:</span> <span id="fileSize"></span></small>
+                                                </div>
+                                                <button type="button" class="btn-close" onclick="clearFileSelection()"></button>
+                                            </div>
+                                        </div>
+                                        <button type="button" class="btn btn-primary btn-lg" onclick="startUploadProcess()" disabled id="uploadProcessBtn">
+                                            <i class="fas fa-play"></i> <span data-i18n="start_process">Start Process</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 进度显示区域 -->
+                <div class="card mb-4" id="progressCard" style="display: none;">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="fas fa-tasks text-primary"></i> <span data-i18n="process_progress">Process Progress</span>
+                        </h5>
+                        <div>
+                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="cancelCurrentTask()">
+                                <i class="fas fa-stop"></i> <span data-i18n="cancel_process">Cancel Process</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <!-- 当前状态 -->
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="fw-bold" data-i18n="current_status">Current Status:</span>
+                                <span id="currentStatus" class="badge bg-primary" data-i18n="preparing">Preparing...</span>
+                            </div>
+                            <div class="progress mb-2" style="height: 8px;">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                                     id="progressBar" role="progressbar" style="width: 0%"></div>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <small id="currentStep" class="text-muted" data-i18n="waiting_start">Waiting to start...</small>
+                                <small id="progressPercent" class="text-muted">0%</small>
+                            </div>
+                        </div>
+
+                        <!-- 步骤进度 -->
+                        <div class="mb-3">
+                            <h6 data-i18n="process_steps">Process Steps:</h6>
+                            <div id="stepsContainer">
+                                <!-- 步骤将动态生成 -->
+                            </div>
+                        </div>
+
+                        <!-- 实时日志 -->
+                        <div class="mb-3">
+                            <h6 data-i18n="process_log">Process Log:</h6>
+                            <div class="log-container" id="logContainer">
+                                <div class="text-muted text-center p-3" data-i18n="waiting_process">Waiting for process to start...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 结果显示区域 -->
+                <div class="card" id="resultCard" style="display: none;">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-check-circle text-success"></i> <span data-i18n="process_result">Process Result</span>
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="resultContent">
+                            <!-- 结果内容将动态生成 -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 侧边栏 - 处理选项 -->
+            <div class="col-lg-4 col-xl-3">
+                <div class="card sticky-top" style="top: 1rem;">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <i class="fas fa-cog text-primary"></i> <span data-i18n="process_options">Process Options</span>
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="accordion mb-3" id="processOptionsAccordion">
+                            <div class="accordion-item">
+                                <h2 class="accordion-header" id="headingBasicSettings">
+                                    <button class="accordion-button collapsed py-2" type="button" data-bs-toggle="collapse" data-bs-target="#collapseBasicSettings" aria-expanded="false" aria-controls="collapseBasicSettings">
+                                        <span data-i18n="basic_settings">Basic Settings</span>
+                                    </button>
+                                </h2>
+                                <div id="collapseBasicSettings" class="accordion-collapse collapse" aria-labelledby="headingBasicSettings" data-bs-parent="#processOptionsAccordion">
+                                    <div class="accordion-body pt-2">
+                                        <div class="form-check mb-2">
+                                            <input class="form-check-input" type="checkbox" id="autoExtract" checked>
+                                            <label class="form-check-label" for="autoExtract" data-i18n="auto_extract">
+                                                Auto Extract
+                                            </label>
+                                        </div>
+                                        <div class="form-check mb-2">
+                                            <input class="form-check-input" type="checkbox" id="autoOrganize" checked>
+                                            <label class="form-check-label" for="autoOrganize" data-i18n="auto_organize">
+                                                Auto Organize Files
+                                            </label>
+                                        </div>
+                                        <div class="form-check mb-2">
+                                            <input class="form-check-input" type="checkbox" id="autoMetadata" checked>
+                                            <label class="form-check-label" for="autoMetadata" data-i18n="auto_metadata">
+                                                Extract Metadata
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="accordion-item">
+                                <h2 class="accordion-header" id="headingFileManagement">
+                                    <button class="accordion-button collapsed py-2" type="button" data-bs-toggle="collapse" data-bs-target="#collapseFileManagement" aria-expanded="false" aria-controls="collapseFileManagement">
+                                        <span data-i18n="file_management">File Management</span>
+                                    </button>
+                                </h2>
+                                <div id="collapseFileManagement" class="accordion-collapse collapse" aria-labelledby="headingFileManagement" data-bs-parent="#processOptionsAccordion">
+                                    <div class="accordion-body pt-2">
+                                        <div class="form-check mb-2">
+                                            <input class="form-check-input" type="checkbox" id="keepZip" checked>
+                                            <label class="form-check-label" for="keepZip" data-i18n="keep_original_zip">
+                                                Keep Original ZIP
+                                            </label>
+                                        </div>
+                                        <div class="form-check mb-2">
+                                            <input class="form-check-input" type="checkbox" id="keepExtracted">
+                                            <label class="form-check-label" for="keepExtracted" data-i18n="keep_extracted_files">
+                                                Keep Extracted Files
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="accordion-item">
+                                <h2 class="accordion-header" id="headingMetadataFields">
+                                    <button class="accordion-button collapsed py-2" type="button" data-bs-toggle="collapse" data-bs-target="#collapseMetadataFields" aria-expanded="false" aria-controls="collapseMetadataFields">
+                                        <span data-i18n="metadata_fields">Metadata Fields</span>
+                                    </button>
+                                </h2>
+                                <div id="collapseMetadataFields" class="accordion-collapse collapse" aria-labelledby="headingMetadataFields" data-bs-parent="#processOptionsAccordion">
+                                    <div class="accordion-body pt-2">
+                                        <div class="form-check mb-2">
+                                            <input class="form-check-input" type="radio" name="keywordConfig" id="defaultKeywords" value="default" checked>
+                                            <label class="form-check-label" for="defaultKeywords" data-i18n="use_default_fields">
+                                                Use Default Fields
+                                            </label>
+                                        </div>
+                                        <div class="form-check mb-2">
+                                            <input class="form-check-input" type="radio" name="keywordConfig" id="customKeywords" value="custom">
+                                            <label class="form-check-label" for="customKeywords" data-i18n="upload_custom_config">
+                                                Upload Custom Config
+                                            </label>
+                                        </div>
+                                        <div class="mt-2" id="customKeywordFile" style="display: none;">
+                                            <input type="file" class="form-control form-control-sm" accept=".json">
+                                            <small class="form-text text-muted" data-i18n="upload_json_help">Upload JSON format field list</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="accordion-item">
+                                <h2 class="accordion-header" id="headingDicomServerConfig">
+                                    <button class="accordion-button collapsed py-2" type="button" data-bs-toggle="collapse" data-bs-target="#collapseDicomServerConfig" aria-expanded="false" aria-controls="collapseDicomServerConfig">
+                                        <span data-i18n="dicom_server_config">DICOM Server Config</span>
+                                    </button>
+                                </h2>
+                                <div id="collapseDicomServerConfig" class="accordion-collapse collapse" aria-labelledby="headingDicomServerConfig" data-bs-parent="#processOptionsAccordion">
+                                    <div class="accordion-body pt-2">
+                                        <div class="mb-2">
+                                            <label class="form-label small mb-1" for="pacsIp" data-i18n="pacs_ip">PACS IP</label>
+                                            <input type="text" class="form-control form-control-sm" id="pacsIp" autocomplete="off">
+                                        </div>
+                                        <div class="mb-2">
+                                            <label class="form-label small mb-1" for="pacsPort" data-i18n="pacs_port">PACS Port</label>
+                                            <input type="number" class="form-control form-control-sm" id="pacsPort" min="1" max="65535" step="1">
+                                        </div>
+                                        <div class="mb-2">
+                                            <label class="form-label small mb-1" for="callingAet" data-i18n="calling_aet">Calling AET</label>
+                                            <input type="text" class="form-control form-control-sm" id="callingAet" autocomplete="off" maxlength="16">
+                                        </div>
+                                        <div class="mb-2">
+                                            <label class="form-label small mb-1" for="calledAet" data-i18n="called_aet">Called AET</label>
+                                            <input type="text" class="form-control form-control-sm" id="calledAet" autocomplete="off" maxlength="16">
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label small mb-1" for="callingPort" data-i18n="calling_port">Calling Port</label>
+                                            <input type="number" class="form-control form-control-sm" id="callingPort" min="1" max="65535" step="1">
+                                        </div>
+                                        <button type="button" class="btn btn-primary btn-sm w-100" id="savePacsConfig">
+                                            <i class="fas fa-save"></i> <span data-i18n="save_config">Save Config</span>
+                                        </button>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm w-100 mt-2" id="testPacsConnection">
+                                            <i class="fas fa-plug"></i> <span data-i18n="test_connection">Test Connection</span>
+                                        </button>
+                                        <small class="form-text text-muted d-block mt-2" data-i18n="pacs_config_help">Saved to server .env and applied to new connections.</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 快速操作 -->
+                        <div class="mb-3">
+                            <h6 class="border-bottom pb-2 mb-3" data-i18n="quick_actions">Quick Actions</h6>
+                            <div class="d-grid gap-2">
+                                <button type="button" class="btn btn-outline-primary btn-sm" onclick="resetAllOptions()">
+                                    <i class="fas fa-undo"></i> <span data-i18n="reset_options">Reset Options</span>
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="exportSettings()">
+                                    <i class="fas fa-download"></i> <span data-i18n="export_config">Export Config</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- 系统信息 -->
+                        <div class="border-top pt-3">
+                            <h6 class="mb-2" data-i18n="system_info">System Info</h6>
+                            <div class="small text-muted">
+                                <div><span data-i18n="active_tasks">Active Tasks:</span> <span id="activeTasks">0</span></div>
+                                <div><span data-i18n="total_tasks">Total Tasks:</span> <span id="totalTasks">0</span></div>
+                                <div><span data-i18n="dicom_service">DICOM Service:</span> <span id="serviceStatus" class="text-success">Normal</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="{{ url_for('static', filename='js/bootstrap.bundle.min.js') }}"></script>
+    <!-- Socket.IO -->
+    <script src="{{ url_for('static', filename='js/socket.io.min.js') }}"></script>
+    <!-- 自定义脚本 -->
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+
+    <!-- 模态框 -->
+    <div class="modal fade" id="errorModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-exclamation-triangle"></i> <span data-i18n="error">Error</span>
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p id="errorMessage"></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" data-i18n="close">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="successModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-check-circle"></i> <span data-i18n="success">Success</span>
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p id="successMessage"></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" data-i18n="close">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
