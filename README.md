@@ -1,5 +1,7 @@
 # DICOM Download & Processing Client
 
+[中文说明请见 README_CN.md](README_CN.md)
+
 A unified client for downloading DICOM files from PACS servers and processing them. This tool provides a web interface for managing downloads, extracting metadata, and converting images.
 
 ## Features
