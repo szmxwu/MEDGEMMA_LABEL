@@ -1,0 +1,1179 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>X光影像标注复核系统</title>
+    
+    <!-- Bootstrap CSS (离线) -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/bootstrap.min.css') }}">
+    <!-- Font Awesome (离线) -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/font-awesome.min.css') }}">
+    
+    <style>
+        :root {
+            --primary-color: #667eea;
+            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --success-color: #52c41a;
+            --warning-color: #faad14;
+            --danger-color: #ff4d4f;
+        }
+        
+        * {
+            box-sizing: border-box;
+        }
+        
+        html, body {
+            height: 100%;
+            margin: 0;
+            background: #f5f7fa;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            font-size: 14px;
+            overflow: hidden;
+        }
+        
+        /* 主容器 */
+        .app-container {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        /* Header */
+        .header {
+            background: var(--primary-gradient);
+            color: white;
+            padding: 10px 0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            flex-shrink: 0;
+        }
+        
+        .header h1 {
+            font-size: 20px;
+            margin: 0;
+        }
+        
+        .stat-card {
+            background: rgba(255,255,255,0.15);
+            border-radius: 6px;
+            padding: 6px 12px;
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 18px;
+            font-weight: bold;
+            display: block;
+            line-height: 1.2;
+        }
+        
+        .stat-label {
+            font-size: 11px;
+            opacity: 0.9;
+        }
+        
+        /* Controls - 增宽下拉框 */
+        .controls {
+            background: white;
+            padding: 12px 20px;
+            border-bottom: 1px solid #e8e8e8;
+            flex-shrink: 0;
+        }
+        
+        .controls .form-select {
+            min-width: 150px;
+            padding: 6px 32px 6px 12px;
+            font-size: 14px;
+            height: 36px;
+        }
+        
+        .controls .btn {
+            padding: 6px 16px;
+            font-size: 14px;
+            height: 36px;
+        }
+        
+        /* 主内容区 */
+        .main-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px 20px;
+        }
+        
+        /* Sample Card */
+        .sample-card {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            margin-bottom: 15px;
+            overflow: hidden;
+        }
+        
+        .sample-header {
+            background: #fafafa;
+            padding: 12px 20px;
+            border-bottom: 1px solid #f0f0f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 14px;
+        }
+        
+        .sample-id {
+            font-weight: 600;
+            color: var(--primary-color);
+            font-size: 15px;
+        }
+        
+        .sample-part {
+            background: #e6f7ff;
+            color: #1890ff;
+            padding: 3px 10px;
+            border-radius: 4px;
+            font-size: 13px;
+            margin-left: 10px;
+        }
+        
+        .review-badge {
+            background: #fff2f0;
+            color: #ff4d4f;
+            border: 1px solid #ffccc7;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        
+        .reviewed-badge {
+            background: #f6ffed;
+            color: #52c41a;
+            border: 1px solid #b7eb8f;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        
+        /* Image Grid - 每行最多4张 */
+        .image-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            padding: 20px;
+        }
+
+        .image-card {
+            border: 1px solid #e8e8e8;
+            border-radius: 8px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            min-height: 280px;
+        }
+
+        /* 缩小图片区域 */
+        .image-wrapper {
+            width: 100%;
+            height: 280px;
+            background: #f5f5f5;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+        
+        .image-wrapper img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+        
+        .image-info {
+            flex: 1;
+            padding: 12px 12px;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            background: #fff;
+        }
+        
+        .image-filename {
+            font-size: 12px;
+            color: #666;
+            word-break: break-all;
+            line-height: 1.3;
+            margin-bottom: 8px;
+        }
+        
+        /* 编辑区域 */
+        .edit-section {
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px dashed #e8e8e8;
+        }
+
+        /* 编辑行：两列布局（各占 50%） */
+        .edit-row {
+            display: flex;
+            gap: 8px;
+            align-items: flex-start;
+            margin-top: 6px;
+        }
+
+        .edit-half {
+            width: 50%;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .edit-row-inner {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        .confidence {
+            font-size: 12px;
+            color: #888;
+            white-space: nowrap;
+            margin-left: 8px;
+        }
+
+        .review-reason {
+            margin-top: 6px;
+            font-size: 12px;
+            color: #d46b08;
+            background: #fff7e6;
+            padding: 6px 8px;
+            border-radius: 4px;
+            border: 1px solid #ffe7ba;
+            word-break: break-word;
+        }
+
+        @media (max-width: 1400px) {
+            .image-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+
+        @media (max-width: 1100px) {
+            .image-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .image-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .edit-label {
+            font-size: 11px;
+            color: var(--primary-color);
+            margin-bottom: 4px;
+        }
+        
+        .form-select-sm {
+            padding: 4px 8px;
+            font-size: 13px;
+            height: 32px;
+            border: 1px solid #d9d9d9;
+            border-radius: 4px;
+            width: 100%;
+        }
+        
+        .form-select-sm:hover, .form-select-sm:focus {
+            border-color: var(--primary-color);
+            outline: none;
+        }
+        
+        .form-select-sm.changed {
+            border-color: var(--success-color);
+            background: #f6ffed;
+        }
+        
+        .form-select-sm.reviewed {
+            border-color: #1890ff;
+            background: #e6f7ff;
+        }
+        
+        .save-status {
+            font-size: 11px;
+            margin-top: 2px;
+            height: 16px;
+        }
+        
+        .save-status.saved { color: var(--success-color); }
+        .save-status.saving { color: var(--warning-color); }
+        .save-status.error { color: var(--danger-color); }
+        
+        /* Pagination */
+        .pagination-container {
+            background: white;
+            border-top: 1px solid #e8e8e8;
+            padding: 10px 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+        
+        .page-btn {
+            padding: 6px 12px;
+            border: 1px solid #d9d9d9;
+            background: white;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.3s;
+        }
+        
+        .page-btn:hover:not(:disabled) {
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+        }
+        
+        .page-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .page-btn.active {
+            background: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+        
+        .page-info {
+            font-size: 13px;
+            color: #666;
+            margin-left: 10px;
+        }
+        
+        /* Toast */
+        .toast-container {
+            position: fixed;
+            top: 70px;
+            right: 20px;
+            z-index: 9999;
+        }
+        
+        .toast {
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 10px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            opacity: 0;
+            transform: translateX(100px);
+            transition: all 0.3s;
+            margin-bottom: 10px;
+        }
+        
+        .toast.show {
+            opacity: 1;
+            transform: translateX(0);
+        }
+        
+        /* Progress Bar */
+        .progress-bar-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: rgba(255,255,255,0.3);
+            z-index: 1001;
+        }
+        
+        .progress-bar {
+            height: 100%;
+            background: var(--success-color);
+            width: 0%;
+            transition: width 0.3s;
+        }
+        
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 50px 20px;
+            color: #999;
+        }
+        
+        .empty-state i {
+            font-size: 48px;
+            margin-bottom: 15px;
+            color: #d9d9d9;
+        }
+        
+        /* Scrollbar */
+        .main-content::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .main-content::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        
+        .main-content::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 3px;
+        }
+        
+        .main-content::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
+        }
+    </style>
+</head>
+<body>
+    <!-- Progress Bar -->
+    <div class="progress-bar-container">
+        <div class="progress-bar" id="progressBar"></div>
+    </div>
+    
+    <div class="app-container">
+        <!-- Header -->
+        <div class="header">
+            <div class="container-fluid">
+                <div class="row align-items-center">
+                    <div class="col-md-3">
+                        <h1><i class="fa fa-hospital-o"></i> X光影像标注复核</h1>
+                    </div>
+                    <div class="col-md-9">
+                        <div class="row">
+                            <div class="col">
+                                <div class="stat-card">
+                                    <span class="stat-value" id="totalSamples">-</span>
+                                    <span class="stat-label">总样本</span>
+                                </div>
+                            </div>
+                            <div class="col">
+                                <div class="stat-card">
+                                    <span class="stat-value" id="totalImages">-</span>
+                                    <span class="stat-label">总图片</span>
+                                </div>
+                            </div>
+                            <div class="col">
+                                <div class="stat-card">
+                                    <span class="stat-value" id="reviewCount">-</span>
+                                    <span class="stat-label">需复核</span>
+                                </div>
+                            </div>
+                            <div class="col">
+                                <div class="stat-card">
+                                    <span class="stat-value" id="reviewedCount">0</span>
+                                    <span class="stat-label">已复核</span>
+                                </div>
+                            </div>
+                            <div class="col">
+                                <div class="stat-card">
+                                    <span class="stat-value" id="modifiedCount">0</span>
+                                    <span class="stat-label">已修改</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Controls - 增宽下拉框 -->
+        <div class="controls">
+            <div class="container-fluid">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <div class="d-flex gap-3">
+                            <select class="form-select" id="partFilter" onchange="filterSamples()" style="min-width: 160px;">
+                                <option value="">全部部位</option>
+                            </select>
+                            <select class="form-select" id="reviewFilter" onchange="filterSamples()" style="min-width: 160px;">
+                                <option value="">全部状态</option>
+                                <option value="needs_review">需复核</option>
+                                <option value="reviewed">已复核</option>
+                            </select>
+                            <select class="form-select" id="pageSize" onchange="changePageSize()" style="min-width: 130px;">
+                                <option value="5">5条/页</option>
+                                <option value="10" selected>10条/页</option>
+                                <option value="20">20条/页</option>
+                                <option value="50">50条/页</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-4 text-end">
+                        <div class="d-flex gap-2 justify-content-end">
+                            <button class="btn btn-outline-primary" onclick="bulkReviewCurrentPage()">
+                                <i class="fa fa-check-square-o"></i> 一键复核
+                            </button>
+                            <button class="btn btn-success" onclick="exportResults()">
+                                <i class="fa fa-download"></i> 导出结果
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Main Content -->
+        <div class="main-content" id="mainContent">
+            <div class="container-fluid" id="sampleContainer">
+                <!-- 样本列表将在这里渲染 -->
+            </div>
+        </div>
+        
+        <!-- Pagination -->
+        <div class="pagination-container" id="pagination">
+            <!-- 分页控件将在这里渲染 -->
+        </div>
+    </div>
+    
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
+    
+    <!-- Bootstrap JS (离线) -->
+    <script src="{{ url_for('static', filename='js/bootstrap.bundle.min.js') }}"></script>
+    
+    <script>
+        // 全局状态
+        let allSamples = [];
+        let filteredSamples = [];
+        let currentPage = 1;
+        let pageSize = 10;
+        let reviewedData = new Set();
+        
+        // 配置选项
+        const PROJECTION_OPTIONS = {
+            'Breast': ['cephalocaudal', 'mediolateral oblique', 'spot compression'],
+            '乳房': ['cephalocaudal', 'mediolateral oblique', 'spot compression'],
+            'default': ['frontal', 'lateral', 'oblique', 'axial', 'special']
+        };
+        
+        const ORIENTATION_OPTIONS = ['left', 'right', 'bilateral', 'Not Applicable'];
+        
+        // 初始化
+        document.addEventListener('DOMContentLoaded', async function() {
+            await loadData();
+            updateStats();
+            populatePartFilter();
+            filterSamples();
+        });
+        
+        // 加载数据
+        async function loadData() {
+            try {
+                const response = await fetch('/api/samples');
+                allSamples = await response.json();
+                filteredSamples = [...allSamples];
+                rebuildReviewedData();
+                // 重置筛选器以避免浏览器保留上一次的选择导致空列表
+                const partSelect = document.getElementById('partFilter');
+                const reviewSelect = document.getElementById('reviewFilter');
+                if (partSelect) partSelect.value = '';
+                if (reviewSelect) reviewSelect.value = '';
+
+                console.log(`✓ 加载了 ${allSamples.length} 个样本`);
+            } catch (error) {
+                console.error('加载数据失败:', error);
+                showToast('加载数据失败', 'error');
+            }
+        }
+
+        function rebuildReviewedData() {
+            reviewedData = new Set();
+            allSamples.forEach(sample => {
+                sample.images.forEach(img => {
+                    if (img.reviewed) {
+                        reviewedData.add(`${sample.image_id}_${img.filename}`);
+                    }
+                });
+            });
+        }
+        
+        // 更新统计
+        function updateStats() {
+            const totalImages = allSamples.reduce((sum, s) => sum + s.images.length, 0);
+            const modifiedCount = allSamples.reduce((sum, s) => 
+                sum + s.images.filter(img => img.projection_modified || img.orientation_modified).length, 0);
+            // 需复核：needs_review=true 且 未被复核过
+            const reviewCount = allSamples.reduce((sum, s) => 
+                sum + s.images.filter(img => img.needs_review && !isReviewed(s.image_id, img.filename)).length, 0);
+            
+            document.getElementById('totalSamples').textContent = allSamples.length;
+            document.getElementById('totalImages').textContent = totalImages;
+            document.getElementById('reviewCount').textContent = reviewCount;
+            document.getElementById('reviewedCount').textContent = reviewedData.size;
+            document.getElementById('modifiedCount').textContent = modifiedCount;
+        }
+        
+        // 检查是否已复核
+        function isReviewed(imageId, filename) {
+            return reviewedData.has(`${imageId}_${filename}`);
+        }
+        
+        // 填充部位筛选器
+        function populatePartFilter() {
+            const parts = [...new Set(allSamples.map(s => s.original_part))].sort();
+            const select = document.getElementById('partFilter');
+            parts.forEach(part => {
+                const option = document.createElement('option');
+                option.value = part;
+                option.textContent = part;
+                select.appendChild(option);
+            });
+            // 确保默认选中为空，避免浏览器恢复先前值
+            select.value = '';
+        }
+        
+        // 筛选样本
+        function filterSamples(resetPage = true) {
+            const partFilter = document.getElementById('partFilter').value;
+            const reviewFilter = document.getElementById('reviewFilter').value;
+            
+            filteredSamples = allSamples.filter(sample => {
+                // 部位筛选
+                if (partFilter && sample.original_part !== partFilter) {
+                    return false;
+                }
+                
+                // 复核状态筛选 - 合并需复核与未复核
+                if (reviewFilter === 'needs_review') {
+                    // 需复核：needs_review=true 且 未被人工复核过
+                    return sample.images.some(img => img.needs_review && !isReviewed(sample.image_id, img.filename));
+                } else if (reviewFilter === 'reviewed') {
+                    // 已复核：已被人工复核过
+                    return sample.images.some(img => isReviewed(sample.image_id, img.filename));
+                }
+                
+                return true;
+            });
+            
+            if (resetPage) {
+                currentPage = 1;
+            }
+            const totalPages = Math.ceil(filteredSamples.length / pageSize);
+            if (totalPages > 0 && currentPage > totalPages) {
+                currentPage = totalPages;
+            }
+            renderSamples();
+            renderPagination();
+        }
+        
+        // 渲染样本
+        function renderSamples() {
+            const container = document.getElementById('sampleContainer');
+            const pageSamples = getCurrentPageSamples();
+            
+            if (pageSamples.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fa fa-search"></i>
+                        <h4>没有找到符合条件的样本</h4>
+                        <p class="text-muted">请调整筛选条件</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = pageSamples.map(sample => {
+                const hasNeedsReview = sample.images.some(img => img.needs_review && !isReviewed(sample.image_id, img.filename));
+                const allReviewed = sample.images.every(img => isReviewed(sample.image_id, img.filename));
+                
+                return `
+                <div class="sample-card" data-sample-id="${sample.image_id}">
+                    <div class="sample-header">
+                        <div>
+                            <span class="sample-id">${sample.image_id}</span>
+                            <span class="sample-part">${sample.original_part}</span>
+                            ${hasNeedsReview ? '<span class="review-badge ms-2"><i class="fa fa-exclamation-triangle"></i> 需复核</span>' : ''}
+                            ${allReviewed ? '<span class="reviewed-badge ms-2"><i class="fa fa-check"></i> 已复核</span>' : ''}
+                        </div>
+                        <span class="text-muted small">${sample.images.length} 张图片</span>
+                    </div>
+                    <div class="image-grid">
+                        ${sample.images.map((img, idx) => renderImageCard(sample, img, idx)).join('')}
+                    </div>
+                </div>
+            `}).join('');
+        }
+
+        function getCurrentPageSamples() {
+            const start = (currentPage - 1) * pageSize;
+            const end = start + pageSize;
+            return filteredSamples.slice(start, end);
+        }
+        
+        // 渲染图片卡片 - 上下排列
+        function renderImageCard(sample, img, idx) {
+            const key = `${sample.image_id}_${img.filename}`;
+            const isReviewedFlag = isReviewed(sample.image_id, img.filename);
+            // 需复核：needs_review=true 且 未被人工复核过
+            const needsReview = img.needs_review && !isReviewedFlag;
+            const showOrientation = img.final_orientation !== 'Not Applicable' && img.final_orientation !== 'unknown';
+            
+            // 当同时存在方位与体位编辑时，横向布局各占 50%
+            if (showOrientation) {
+                return `
+                <div class="image-card" data-key="${key}">
+                    <div class="image-wrapper">
+                        <img src="${img.image_url}" 
+                             alt="${img.filename}"
+                             onerror="this.src='{{ url_for('static', filename='images/placeholder.png') }}'">
+                    </div>
+                    <div class="image-info">
+                        <div class="image-filename">
+                            <i class="fa fa-file-image-o"></i> ${img.filename}
+                            ${isReviewedFlag ? '<span class="reviewed-badge ms-2"><i class="fa fa-check"></i> 已复核</span>' : ''}
+                            ${needsReview ? '<span class="review-badge ms-2">需复核</span>' : ''}
+                        </div>
+                        <div class="edit-section">
+                            <div class="edit-row">
+                                <div class="edit-half">
+                                    <div class="edit-label"><i class="fa fa-edit"></i> 修改方位</div>
+                                    <div class="edit-row-inner">
+                                        <select class="form-select-sm ${isReviewedFlag ? 'reviewed' : ''} ${img.orientation_modified ? 'changed' : ''}"
+                                                data-key="${key}"
+                                                data-type="orientation"
+                                                data-sample-id="${sample.image_id}"
+                                                data-filename="${img.filename}"
+                                                onchange="handleLabelChange(this)"
+                                                onclick="markAsReviewed('${sample.image_id}', '${img.filename}')">
+                                            ${generateOptions(ORIENTATION_OPTIONS, img.final_orientation)}
+                                        </select>
+                                        <div class="confidence">置信度: ${typeof img.confidence_orientation !== 'undefined' ? Number(img.confidence_orientation).toFixed(2) : ''}</div>
+                                    </div>
+                                    <div class="save-status" id="status-${key}-ori"></div>
+                                </div>
+
+                                <div class="edit-half">
+                                    <div class="edit-label"><i class="fa fa-edit"></i> 修改体位</div>
+                                    <div class="edit-row-inner">
+                                        <select class="form-select-sm ${isReviewedFlag ? 'reviewed' : ''} ${img.projection_modified ? 'changed' : ''}"
+                                                data-key="${key}"
+                                                data-type="projection"
+                                                data-sample-id="${sample.image_id}"
+                                                data-filename="${img.filename}"
+                                                onchange="handleLabelChange(this)"
+                                                onclick="markAsReviewed('${sample.image_id}', '${img.filename}')">
+                                            ${generateProjectionOptions(sample.original_part, img.final_projection)}
+                                        </select>
+                                        <div class="confidence">置信度: ${typeof img.confidence_projection !== 'undefined' ? Number(img.confidence_projection).toFixed(2) : ''}</div>
+                                    </div>
+                                    <div class="save-status" id="status-${key}-proj"></div>
+                                    ${needsReview ? '<div class="save-status error">需复核</div>' : ''}
+                                </div>
+                            </div>
+                            ${isValidReason(img.review_reason) ? `<div class="review-reason">复核原因: ${escapeHtml(img.review_reason)}</div>` : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+            } else {
+                // 只有体位编辑时保持原有单列布局，但显示置信度在下拉右侧
+                return `
+                <div class="image-card" data-key="${key}">
+                    <div class="image-wrapper">
+                        <img src="${img.image_url}" 
+                             alt="${img.filename}"
+                             onerror="this.src='{{ url_for('static', filename='images/placeholder.png') }}'">
+                    </div>
+                    <div class="image-info">
+                        <div class="image-filename">
+                            <i class="fa fa-file-image-o"></i> ${img.filename}
+                            ${isReviewedFlag ? '<span class="reviewed-badge ms-2"><i class="fa fa-check"></i> 已复核</span>' : ''}
+                            ${needsReview ? '<span class="review-badge ms-2">需复核</span>' : ''}
+                        </div>
+                        <div class="edit-section">
+                            <div class="edit-label"><i class="fa fa-edit"></i> 修改体位</div>
+                            <div class="edit-row-inner">
+                                <select class="form-select-sm ${isReviewedFlag ? 'reviewed' : ''} ${img.projection_modified ? 'changed' : ''}"
+                                        data-key="${key}"
+                                        data-type="projection"
+                                        data-sample-id="${sample.image_id}"
+                                        data-filename="${img.filename}"
+                                        onchange="handleLabelChange(this)"
+                                        onclick="markAsReviewed('${sample.image_id}', '${img.filename}')">
+                                    ${generateProjectionOptions(sample.original_part, img.final_projection)}
+                                </select>
+                                <div class="confidence">置信度: ${typeof img.confidence_projection !== 'undefined' ? Number(img.confidence_projection).toFixed(2) : ''}</div>
+                            </div>
+                            <div class="save-status" id="status-${key}-proj"></div>
+                            ${needsReview ? '<div class="save-status error">需复核</div>' : ''}
+                            ${isValidReason(img.review_reason) ? `<div class="review-reason">复核原因: ${escapeHtml(img.review_reason)}</div>` : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+            }
+        }
+
+        // 简单转义以防 review_reason 中包含 HTML
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        // 检查 review_reason 是否为有效字符串（非空、非 NaN）
+        function isValidReason(s) {
+            if (s === null || s === undefined) return false;
+            const str = String(s).trim();
+            if (!str) return false;
+            // 排除 pandas 导出后变成的 'nan' 或 'NaN' 或 'None'
+            const low = str.toLowerCase();
+            if (low === 'nan' || low === 'none' || low === 'null') return false;
+            return true;
+        }
+        
+        // 生成选项
+        function generateOptions(options, currentValue) {
+            return `
+                <option value="">-- 选择 --</option>
+                ${options.map(opt => `
+                    <option value="${opt}" ${opt === currentValue ? 'selected' : ''}>
+                        ${opt}
+                    </option>
+                `).join('')}
+            `;
+        }
+        
+        // 生成体位选项
+        function generateProjectionOptions(part, currentValue) {
+            const options = PROJECTION_OPTIONS[part] || PROJECTION_OPTIONS['default'];
+            return generateOptions(options, currentValue);
+        }
+        
+        // 标记为已复核
+        async function markAsReviewed(imageId, filename) {
+            const key = `${imageId}_${filename}`;
+            if (!reviewedData.has(key)) {
+                reviewedData.add(key);
+                const sample = allSamples.find(s => s.image_id === imageId);
+                const img = sample?.images.find(i => i.filename === filename);
+                if (img) {
+                    img.reviewed = true;
+                }
+                updateStats();
+                
+                // 更新UI
+                const card = document.querySelector(`[data-key="${key}"]`);
+                if (card) {
+                    const selects = card.querySelectorAll('select');
+                    selects.forEach(s => s.classList.add('reviewed'));
+                    
+                    // 更新badge
+                    const filenameDiv = card.querySelector('.image-filename');
+                    if (filenameDiv) {
+                        // 移除需复核badge
+                        const reviewBadge = filenameDiv.querySelector('.review-badge');
+                        if (reviewBadge) reviewBadge.remove();
+                        
+                        // 添加已复核badge
+                        if (!filenameDiv.querySelector('.reviewed-badge')) {
+                            const badge = document.createElement('span');
+                            badge.className = 'reviewed-badge ms-2';
+                            badge.innerHTML = '<i class="fa fa-check"></i> 已复核';
+                            filenameDiv.appendChild(badge);
+                        }
+                    }
+                }
+                
+                // 更新样本header
+                updateSampleHeader(imageId);
+
+                const reviewFilter = document.getElementById('reviewFilter').value;
+                if (reviewFilter === 'needs_review') {
+                    filterSamples(false);
+                }
+
+                try {
+                    const response = await fetch('/api/review', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ image_id: imageId, filename: filename, reviewed: true })
+                    });
+                    const result = await response.json();
+                    if (!result.success) {
+                        throw new Error(result.message);
+                    }
+                } catch (error) {
+                    reviewedData.delete(key);
+                    if (img) {
+                        img.reviewed = false;
+                    }
+                    updateStats();
+                    renderSamples();
+                    renderPagination();
+                    showToast('复核保存失败: ' + error.message, 'error');
+                }
+            }
+        }
+
+        function bulkReviewCurrentPage() {
+            const pageSamples = getCurrentPageSamples();
+            let updatedCount = 0;
+            const items = [];
+
+            pageSamples.forEach(sample => {
+                sample.images.forEach(img => {
+                    const key = `${sample.image_id}_${img.filename}`;
+                    if (!reviewedData.has(key)) {
+                        reviewedData.add(key);
+                        img.reviewed = true;
+                        items.push({ image_id: sample.image_id, filename: img.filename, reviewed: true });
+                        updatedCount += 1;
+                    }
+                });
+            });
+
+            if (updatedCount === 0) {
+                showToast('当前页面没有未复核图片');
+                return;
+            }
+
+            fetch('/api/review/bulk', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ items: items })
+            })
+                .then(response => response.json())
+                .then(result => {
+                    if (!result.success) {
+                        throw new Error(result.message);
+                    }
+                    updateStats();
+                    updateProgressBar();
+
+                    const reviewFilter = document.getElementById('reviewFilter').value;
+                    if (reviewFilter === 'needs_review') {
+                        filterSamples(false);
+                    } else {
+                        renderSamples();
+                        renderPagination();
+                    }
+
+                    showToast(`已复核 ${updatedCount} 张图片`);
+                })
+                .catch(error => {
+                    items.forEach(item => {
+                        const key = `${item.image_id}_${item.filename}`;
+                        reviewedData.delete(key);
+                        const sample = allSamples.find(s => s.image_id === item.image_id);
+                        const img = sample?.images.find(i => i.filename === item.filename);
+                        if (img) {
+                            img.reviewed = false;
+                        }
+                    });
+                    updateStats();
+                    renderSamples();
+                    renderPagination();
+                    showToast('批量复核保存失败: ' + error.message, 'error');
+                });
+        }
+        
+        // 更新样本header状态
+        function updateSampleHeader(imageId) {
+            const sampleCard = document.querySelector(`[data-sample-id="${imageId}"]`);
+            if (!sampleCard) return;
+            
+            const sample = allSamples.find(s => s.image_id === imageId);
+            if (!sample) return;
+            
+            const allReviewed = sample.images.every(img => isReviewed(imageId, img.filename));
+            // 需复核：needs_review=true 且 未被人工复核过
+            const hasNeedsReview = sample.images.some(img => img.needs_review && !isReviewed(imageId, img.filename));
+            
+            const headerDiv = sampleCard.querySelector('.sample-header div');
+            
+            // 移除旧badge
+            const oldBadges = headerDiv.querySelectorAll('.review-badge, .reviewed-badge');
+            oldBadges.forEach(b => b.remove());
+            
+            // 添加新badge
+            if (allReviewed) {
+                headerDiv.innerHTML += '<span class="reviewed-badge ms-2"><i class="fa fa-check"></i> 已复核</span>';
+            } else if (hasNeedsReview) {
+                headerDiv.innerHTML += '<span class="review-badge ms-2"><i class="fa fa-exclamation-triangle"></i> 需复核</span>';
+            }
+        }
+        
+        // 处理标签修改
+        async function handleLabelChange(select) {
+            const key = select.dataset.key;
+            const type = select.dataset.type;
+            const imageId = select.dataset.sampleId;
+            const filename = select.dataset.filename;
+            const newValue = select.value;
+            const statusEl = select.nextElementSibling;
+            
+            if (!newValue) return;
+            
+            // 显示保存中
+            statusEl.textContent = '保存中...';
+            statusEl.className = 'save-status saving';
+            
+            try {
+                const data = {
+                    image_id: imageId,
+                    filename: filename
+                };
+                data[type] = newValue;
+                
+                const response = await fetch('/api/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    statusEl.innerHTML = '<i class="fa fa-check"></i> 已保存';
+                    statusEl.className = 'save-status saved';
+                    
+                    // 更新内存数据与样式
+                    const sample = allSamples.find(s => s.image_id === imageId);
+                    const img = sample?.images.find(i => i.filename === filename);
+                    if (img) {
+                        if (type === 'orientation') {
+                            img.final_orientation = newValue;
+                            img.orientation_modified = true;
+                        } else if (type === 'projection') {
+                            img.final_projection = newValue;
+                            img.projection_modified = true;
+                        }
+                    }
+                    select.classList.add('changed');
+
+                    updateStats();
+                    updateProgressBar();
+                    
+                    setTimeout(() => { statusEl.textContent = ''; }, 1500);
+                } else {
+                    throw new Error(result.message);
+                }
+            } catch (error) {
+                statusEl.textContent = '失败';
+                statusEl.className = 'save-status error';
+                showToast('保存失败: ' + error.message, 'error');
+            }
+        }
+        
+        // 渲染分页
+        function renderPagination() {
+            const totalPages = Math.ceil(filteredSamples.length / pageSize);
+            const pagination = document.getElementById('pagination');
+            
+            if (totalPages <= 1) {
+                pagination.innerHTML = '';
+                return;
+            }
+            
+            let html = `
+                <button class="page-btn" onclick="goToPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}>
+                    <i class="fa fa-chevron-left"></i>
+                </button>
+            `;
+            
+            const maxButtons = 5;
+            let startPage = Math.max(1, currentPage - Math.floor(maxButtons / 2));
+            let endPage = Math.min(totalPages, startPage + maxButtons - 1);
+            
+            if (endPage - startPage < maxButtons - 1) {
+                startPage = Math.max(1, endPage - maxButtons + 1);
+            }
+            
+            if (startPage > 1) {
+                html += `<button class="page-btn" onclick="goToPage(1)">1</button>`;
+                if (startPage > 2) html += `<span>...</span>`;
+            }
+            
+            for (let i = startPage; i <= endPage; i++) {
+                html += `<button class="page-btn ${i === currentPage ? 'active' : ''}" onclick="goToPage(${i})">${i}</button>`;
+            }
+            
+            if (endPage < totalPages) {
+                if (endPage < totalPages - 1) html += `<span>...</span>`;
+                html += `<button class="page-btn" onclick="goToPage(${totalPages})">${totalPages}</button>`;
+            }
+            
+            html += `
+                <button class="page-btn" onclick="goToPage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''}>
+                    <i class="fa fa-chevron-right"></i>
+                </button>
+                <span class="page-info">${currentPage}/${totalPages}页</span>
+            `;
+            
+            pagination.innerHTML = html;
+        }
+        
+        // 跳转到页
+        function goToPage(page) {
+            const totalPages = Math.ceil(filteredSamples.length / pageSize);
+            if (page < 1 || page > totalPages) return;
+            
+            currentPage = page;
+            renderSamples();
+            renderPagination();
+            document.getElementById('mainContent').scrollTop = 0;
+        }
+        
+        // 改变页大小
+        function changePageSize() {
+            pageSize = parseInt(document.getElementById('pageSize').value);
+            currentPage = 1;
+            renderSamples();
+            renderPagination();
+        }
+        
+        // 更新进度条
+        function updateProgressBar() {
+            const totalImages = allSamples.reduce((sum, s) => sum + s.images.length, 0);
+            const percent = totalImages > 0 ? (reviewedData.size / totalImages) * 100 : 0;
+            document.getElementById('progressBar').style.width = percent + '%';
+        }
+        
+        // 显示提示
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = 'toast show';
+            toast.innerHTML = type === 'success' 
+                ? `<i class="fa fa-check-circle"></i> ${message}`
+                : `<i class="fa fa-exclamation-circle"></i> ${message}`;
+            container.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => toast.remove(), 300);
+            }, 2500);
+        }
+        
+        // 导出结果
+        async function exportResults() {
+            try {
+                const response = await fetch('/api/export');
+                const result = await response.json();
+                
+                const blob = new Blob([JSON.stringify(result, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `review_results_${new Date().toISOString().slice(0,10)}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                showToast('✓ 结果已导出');
+            } catch (error) {
+                showToast('导出失败: ' + error.message, 'error');
+            }
+        }
+    </script>
+</body>
+</html>

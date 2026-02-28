@@ -1,0 +1,138 @@
+{
+    "下肢": {"exam_projection":["frontal","lateral"],
+            "Position_orientation":["left","right","bilateral"]},
+    "肘关节": {"exam_projection":["frontal","lateral"],
+            "Position_orientation":["left","right","bilateral"]},
+    "盆部": {"exam_projection":["frontal","lateral","oblique","special"],
+            "Position_orientation":[]},
+    "足部": {"exam_projection":[
+        "oblique",
+        "frontal",
+        "lateral",
+        "axial"
+    ],
+    "Position_orientation":["left","right","bilateral"]},
+    "脊柱": {"exam_projection":[
+        "frontal",
+        "lateral",
+        "lateral"
+    ],
+    "Position_orientation":[]},
+    "大腿": {"exam_projection":[
+        "frontal",
+        "lateral"
+    ],
+    "Position_orientation":["left","right","bilateral"]},
+    "腹部": {"exam_projection":[
+        "frontal",
+        "lateral"
+    ],
+    "Position_orientation":[]},
+    "踝关节": {"exam_projection":[
+        "frontal",
+        "lateral",
+        "special"
+    ],
+    "Position_orientation":["left","right","bilateral"]},
+    "颜面": {"exam_projection":[
+        "lateral",
+        "frontal",
+        "special"
+    ],
+    "Position_orientation":[]},
+    "腕关节": {"exam_projection":[
+        "frontal",
+        "lateral",
+        "special",
+        "oblique"
+    ],
+    "Position_orientation":["left","right","bilateral"]},
+    "肩部": {"exam_projection":[
+        "frontal",
+        "oblique"
+    ],
+    "Position_orientation":["left","right","bilateral"]},
+    "腰椎": {"exam_projection":[
+        "frontal",
+        "lateral",
+        "oblique",
+        "lateral"
+    ],
+    "Position_orientation":[]},
+    "骶髂关节": {"exam_projection":[
+        "oblique",
+        "frontal",
+        "oblique"
+    ],
+    "Position_orientation":[]},
+    "胸椎": {"exam_projection":[
+        "frontal",
+        "lateral"
+    ],
+    "Position_orientation":[]},
+    "颈椎": {"exam_projection":[
+        "frontal",
+        "lateral",
+        "lateral",
+        "oblique"
+    ],
+    "Position_orientation":[]},
+    "小腿": {"exam_projection":[
+        "frontal",
+        "lateral"
+    ],
+    "Position_orientation":["left","right","bilateral"]},
+    "颅脑": {"exam_projection":[
+        "frontal",
+        "lateral",
+        "special",
+        "lateral"
+    ],
+    "Position_orientation":[]},
+    "跟骨": {"exam_projection":[
+        "axial",
+        "lateral"
+    ],
+    "Position_orientation":["left","right","bilateral"]},
+    "膝关节": {"exam_projection":[
+        "frontal",
+        "lateral",
+        "axial"
+    ],
+    "Position_orientation":["left","right","bilateral"]},
+
+    "胸部": {"exam_projection":[
+        "frontal",
+        "lateral",
+        "oblique"
+    ],
+    "Position_orientation":[]},
+    "手": {"exam_projection":[
+        "oblique",
+        "frontal",
+        "lateral"
+    ],
+    "Position_orientation":["left","right","bilateral"]},
+    "骶尾椎": {"exam_projection":[
+        "lateral",
+        "frontal"
+    ],
+    "Position_orientation":[]},
+    "乳房": {"exam_projection":[
+        "cephalocaudal",
+        "mediolateral oblique",
+        "spot compression"
+    ],
+    "Position_orientation":["left","right","bilateral"]},
+    "上臂": {"exam_projection":[
+        "lateral",
+        "frontal"
+    ],
+    "Position_orientation":["left","right","bilateral"]},
+    "前臂": {"exam_projection":[
+        "lateral",
+        "frontal"
+    ],
+    "Position_orientation":["left","right","bilateral"]}
+
+}
