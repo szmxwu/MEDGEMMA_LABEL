@@ -36,7 +36,7 @@
 flowchart TB
     subgraph Input["📥 输入层"]
         A[selected_samples.xlsx<br/>样本元数据]
-        B[data/{影像号}/png<br/>X光影像图片]
+        B[data/影像号/png<br/>X光影像图片]
         C[part_exam_orientation.json<br/>部位配置映射]
     end
     
