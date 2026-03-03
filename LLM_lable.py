@@ -121,7 +121,7 @@ CN_EN_MAP = {
 
 # 脊柱和下肢的细分选项
 SUB_PART_OPTIONS = {
-    "脊柱": ["Cervical Spine", "Thoracic Spine", "Lumbar Spine", "Full Spine"],
+    "脊柱": ["Cervical Spine", "Thoracic Spine", "Lumbar Spine", "Full Spine","Pelvis"],
     "下肢": ["Thigh", "Calf", "Full Lower Limb"]
 }
 
