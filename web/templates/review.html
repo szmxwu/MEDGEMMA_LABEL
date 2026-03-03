@@ -178,6 +178,33 @@
             align-items: center;
             justify-content: center;
             overflow: hidden;
+            position: relative;
+        }
+
+        .invalid-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 26px;
+            height: 26px;
+            border: none;
+            border-radius: 50%;
+            background: rgba(255, 77, 79, 0.92);
+            color: #fff;
+            font-size: 14px;
+            font-weight: 700;
+            line-height: 1;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.15s ease, background 0.15s ease;
+            z-index: 3;
+        }
+
+        .invalid-btn:hover {
+            background: #ff4d4f;
+            transform: scale(1.05);
         }
         
         .image-wrapper img {
@@ -716,6 +743,7 @@
                 return `
                 <div class="image-card" data-key="${key}">
                     <div class="image-wrapper">
+                        <button class="invalid-btn" title="标记为无效样本并删除" onclick="invalidateImage('${sample.image_id}', '${img.filename}')">×</button>
                         <img src="${img.image_url}" 
                              alt="${img.filename}"
                              onerror="this.src='{{ url_for('static', filename='images/placeholder.png') }}'">
@@ -773,6 +801,7 @@
                 return `
                 <div class="image-card" data-key="${key}">
                     <div class="image-wrapper">
+                        <button class="invalid-btn" title="标记为无效样本并删除" onclick="invalidateImage('${sample.image_id}', '${img.filename}')">×</button>
                         <img src="${img.image_url}" 
                              alt="${img.filename}"
                              onerror="this.src='{{ url_for('static', filename='images/placeholder.png') }}'">
@@ -973,6 +1002,40 @@
                     renderPagination();
                     showToast('批量复核保存失败: ' + error.message, 'error');
                 });
+        }
+
+        // 标记图片为无效样本并删除
+        async function invalidateImage(imageId, filename) {
+            const confirmed = window.confirm(`确认将 ${filename} 标记为无效样本并删除吗？`);
+            if (!confirmed) return;
+
+            try {
+                const response = await fetch('/api/invalidate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ image_id: imageId, filename: filename, invalid_label: 'invalid_sample' })
+                });
+                const result = await response.json();
+                if (!result.success) {
+                    throw new Error(result.message || '标记失败');
+                }
+
+                const key = `${imageId}_${filename}`;
+                reviewedData.delete(key);
+
+                const sample = allSamples.find(s => s.image_id === imageId);
+                if (sample) {
+                    sample.images = sample.images.filter(img => img.filename !== filename);
+                }
+                allSamples = allSamples.filter(s => s.images && s.images.length > 0);
+
+                updateStats();
+                filterSamples(false);
+                updateProgressBar();
+                showToast('已标记无效并删除该图片');
+            } catch (error) {
+                showToast('删除失败: ' + error.message, 'error');
+            }
         }
         
         // 更新样本header状态
