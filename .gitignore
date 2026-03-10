@@ -197,3 +197,5 @@ download
 failed_samples_*
 data/*
 .vscode
+
+*.jsonl
