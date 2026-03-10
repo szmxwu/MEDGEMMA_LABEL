@@ -69,6 +69,12 @@ def load_data_from_excel(excel_path):
         df['reviewed'] = False
     if 'reviewed_at' not in df.columns:
         df['reviewed_at'] = ''
+    if 'is_invalid' not in df.columns:
+        df['is_invalid'] = False
+    if 'invalid_label' not in df.columns:
+        df['invalid_label'] = ''
+    if 'invalid_at' not in df.columns:
+        df['invalid_at'] = ''
     
     # 按image_id分组
     grouped = df.groupby('image_id')
@@ -85,14 +91,18 @@ def load_data_from_excel(excel_path):
         return bool(v)
     
     for image_id, group in grouped:
+        valid_group = group[~group['is_invalid'].fillna(False)]
+        if valid_group.empty:
+            continue
+
         sample = {
             'image_id': str(image_id),
-            'original_part': safe_str(group['original_part'].iloc[0], 'unknown'),
-            'needs_review': safe_bool(group['needs_review'].any()),
+            'original_part': safe_str(valid_group['original_part'].iloc[0], 'unknown'),
+            'needs_review': safe_bool(valid_group['needs_review'].any()),
             'images': []
         }
         
-        for _, row in group.iterrows():
+        for _, row in valid_group.iterrows():
             img_path = f"/api/image/{image_id}/{row['filename']}"
             # 处理可能的 NaN 值，确保 JSON 可序列化（浏览器端 JSON.parse 无法解析 NaN）
             def safe_float(v, default=0.0):
@@ -161,9 +171,12 @@ def get_stats():
 @app.route('/api/save', methods=['POST'])
 def save_modification():
     """保存修改"""
-    data = request.json
+    data = request.json or {}
     if not app_status.get('excel_path'):
         return jsonify({'success': False, 'message': '未找到Excel数据文件'}), 500
+
+    if not data.get('image_id') or not data.get('filename'):
+        return jsonify({'success': False, 'message': '参数缺失'}), 400
 
     try:
         import pandas as pd
@@ -329,6 +342,58 @@ def save_review_bulk():
         return jsonify({'success': False, 'message': f'保存失败: {str(e)}'}), 500
 
 
+@app.route('/api/invalidate', methods=['POST'])
+def invalidate_sample_image():
+    """标记图片为无效样本（软删除）"""
+    data = request.json or {}
+    if not app_status.get('excel_path'):
+        return jsonify({'success': False, 'message': '未找到Excel数据文件'}), 500
+
+    image_id = data.get('image_id')
+    filename = data.get('filename')
+    invalid_label = data.get('invalid_label', 'invalid_sample')
+
+    if not image_id or not filename:
+        return jsonify({'success': False, 'message': '参数缺失'}), 400
+
+    try:
+        import pandas as pd
+
+        excel_path = app_status['excel_path']
+        with EXCEL_LOCK:
+            df = pd.read_excel(excel_path)
+            if 'is_invalid' not in df.columns:
+                df['is_invalid'] = False
+            if 'invalid_label' not in df.columns:
+                df['invalid_label'] = ''
+            if 'invalid_at' not in df.columns:
+                df['invalid_at'] = ''
+
+            mask = (df['image_id'].astype(str) == str(image_id)) & (df['filename'] == filename)
+            if not mask.any():
+                return jsonify({'success': False, 'message': '未找到对应记录'}), 404
+
+            now_str = time.strftime('%Y-%m-%d %H:%M:%S')
+            df.loc[mask, 'is_invalid'] = True
+            df.loc[mask, 'invalid_label'] = str(invalid_label)
+            df.loc[mask, 'invalid_at'] = now_str
+            df.to_excel(excel_path, index=False)
+
+        # 更新内存样本：移除该图片；若样本无图则移除样本
+        for sample in list(app_status['samples']):
+            if str(sample['image_id']) != str(image_id):
+                continue
+            sample['images'] = [img for img in sample['images'] if img['filename'] != filename]
+            sample['needs_review'] = any(img.get('needs_review', False) for img in sample['images'])
+            if not sample['images']:
+                app_status['samples'].remove(sample)
+            break
+
+        return jsonify({'success': True, 'message': '已标记为无效样本并写入Excel标签'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'标记失败: {str(e)}'}), 500
+
+
 @app.route('/api/export')
 def export_results():
     """导出结果"""
@@ -350,7 +415,10 @@ def export_results():
                     'projection_modified': img.get('projection_modified', False),
                     'orientation_modified': img.get('orientation_modified', False),
                     'modified_at': img.get('modified_at', ''),
-                    'needs_review': img['needs_review']
+                    'needs_review': img['needs_review'],
+                    'is_invalid': img.get('is_invalid', False),
+                    'invalid_label': img.get('invalid_label', ''),
+                    'invalid_at': img.get('invalid_at', '')
                 })
             result.append(sample_data)
     else:
@@ -397,7 +465,8 @@ def get_image(image_path):
 @app.route('/static/<path:filename>')
 def static_files(filename):
     """静态文件"""
-    return send_from_directory(app.static_folder, filename)
+    static_dir = app.static_folder or str(Path(__file__).parent / 'static')
+    return send_from_directory(static_dir, filename)
 
 
 def init_data(excel_path=None):

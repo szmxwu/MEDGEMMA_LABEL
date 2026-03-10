@@ -199,3 +199,4 @@ data/*
 .vscode
 
 *.jsonl
+*.xlsx
