@@ -325,6 +325,66 @@
             background: #e6f7ff;
         }
         
+        /* 紧凑单选按钮组 */
+        .radio-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+        
+        .radio-btn {
+            position: relative;
+        }
+        
+        .radio-btn input[type="radio"] {
+            position: absolute;
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .radio-btn label {
+            display: inline-block;
+            padding: 3px 8px;
+            font-size: 12px;
+            line-height: 1.4;
+            border: 1px solid #d9d9d9;
+            border-radius: 4px;
+            background: #fff;
+            color: #666;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+            user-select: none;
+        }
+        
+        .radio-btn input[type="radio"]:checked + label {
+            background: #667eea;
+            border-color: #667eea;
+            color: #fff;
+        }
+        
+        .radio-btn input[type="radio"]:hover + label {
+            border-color: #667eea;
+            color: #667eea;
+        }
+        
+        .radio-btn input[type="radio"]:checked:hover + label {
+            color: #fff;
+        }
+        
+        .radio-btn input[type="radio"].modified + label {
+            border-color: #52c41a;
+            background: #f6ffed;
+            color: #52c41a;
+        }
+        
+        .radio-btn input[type="radio"]:checked.modified + label {
+            background: #52c41a;
+            border-color: #52c41a;
+            color: #fff;
+        }
+        
         .save-status {
             font-size: 11px;
             margin-top: 2px;
@@ -868,36 +928,14 @@
                         <div class="edit-section">
                             <div class="edit-row">
                                 <div class="edit-half">
-                                    <div class="edit-label"><i class="fa fa-edit"></i> 修改方位</div>
-                                    <div class="edit-row-inner">
-                                        <select class="form-select-sm ${isReviewedFlag ? 'reviewed' : ''} ${img.orientation_modified ? 'changed' : ''}"
-                                                data-key="${key}"
-                                                data-type="orientation"
-                                                data-sample-id="${sample.image_id}"
-                                                data-filename="${img.filename}"
-                                                onchange="handleLabelChange(this)"
-                                                onclick="markAsReviewed('${sample.image_id}', '${img.filename}')">
-                                            ${generateOptions(ORIENTATION_OPTIONS, img.final_orientation)}
-                                        </select>
-                                        <div class="confidence">置信度: ${typeof img.confidence_orientation !== 'undefined' ? Number(img.confidence_orientation).toFixed(2) : ''}</div>
-                                    </div>
+                                    <div class="edit-label"><i class="fa fa-edit"></i> 方位 <span class="confidence">(${typeof img.confidence_orientation !== 'undefined' ? Number(img.confidence_orientation).toFixed(2) : ''})</span></div>
+                                    ${generateRadioGroup(ORIENTATION_OPTIONS, img.final_orientation, `ori_${key}`, 'orientation', sample.image_id, img.filename, img.orientation_modified, isReviewedFlag)}
                                     <div class="save-status" id="status-${key}-ori"></div>
                                 </div>
 
                                 <div class="edit-half">
-                                    <div class="edit-label"><i class="fa fa-edit"></i> 修改体位</div>
-                                    <div class="edit-row-inner">
-                                        <select class="form-select-sm ${isReviewedFlag ? 'reviewed' : ''} ${img.projection_modified ? 'changed' : ''}"
-                                                data-key="${key}"
-                                                data-type="projection"
-                                                data-sample-id="${sample.image_id}"
-                                                data-filename="${img.filename}"
-                                                onchange="handleLabelChange(this)"
-                                                onclick="markAsReviewed('${sample.image_id}', '${img.filename}')">
-                                            ${generateProjectionOptions(sample.original_part, img.final_projection)}
-                                        </select>
-                                        <div class="confidence">置信度: ${typeof img.confidence_projection !== 'undefined' ? Number(img.confidence_projection).toFixed(2) : ''}</div>
-                                    </div>
+                                    <div class="edit-label"><i class="fa fa-edit"></i> 体位 <span class="confidence">(${typeof img.confidence_projection !== 'undefined' ? Number(img.confidence_projection).toFixed(2) : ''})</span></div>
+                                    ${generateProjectionRadioGroup(sample.original_part, img.final_projection, `proj_${key}`, 'projection', sample.image_id, img.filename, img.projection_modified, isReviewedFlag)}
                                     <div class="save-status" id="status-${key}-proj"></div>
                                     ${needsReview ? '<div class="save-status error">需复核</div>' : ''}
                                 </div>
@@ -908,7 +946,7 @@
                 </div>
             `;
             } else {
-                // 只有体位编辑时保持原有单列布局，但显示置信度在下拉右侧
+                // 只有体位编辑时使用单选按钮组
                 return `
                 <div class="image-card" data-key="${key}">
                     <div class="image-wrapper">
@@ -924,19 +962,8 @@
                             ${needsReview ? '<span class="review-badge ms-2">需复核</span>' : ''}
                         </div>
                         <div class="edit-section">
-                            <div class="edit-label"><i class="fa fa-edit"></i> 修改体位</div>
-                            <div class="edit-row-inner">
-                                <select class="form-select-sm ${isReviewedFlag ? 'reviewed' : ''} ${img.projection_modified ? 'changed' : ''}"
-                                        data-key="${key}"
-                                        data-type="projection"
-                                        data-sample-id="${sample.image_id}"
-                                        data-filename="${img.filename}"
-                                        onchange="handleLabelChange(this)"
-                                        onclick="markAsReviewed('${sample.image_id}', '${img.filename}')">
-                                    ${generateProjectionOptions(sample.original_part, img.final_projection)}
-                                </select>
-                                <div class="confidence">置信度: ${typeof img.confidence_projection !== 'undefined' ? Number(img.confidence_projection).toFixed(2) : ''}</div>
-                            </div>
+                            <div class="edit-label"><i class="fa fa-edit"></i> 体位 <span class="confidence">(${typeof img.confidence_projection !== 'undefined' ? Number(img.confidence_projection).toFixed(2) : ''})</span></div>
+                            ${generateProjectionRadioGroup(sample.original_part, img.final_projection, `proj_${key}`, 'projection', sample.image_id, img.filename, img.projection_modified, isReviewedFlag)}
                             <div class="save-status" id="status-${key}-proj"></div>
                             ${needsReview ? '<div class="save-status error">需复核</div>' : ''}
                             ${isValidReason(img.review_reason) ? `<div class="review-reason">复核原因: ${escapeHtml(img.review_reason)}</div>` : ''}
@@ -969,23 +996,7 @@
             return true;
         }
         
-        // 生成选项
-        function generateOptions(options, currentValue) {
-            return `
-                <option value="">-- 选择 --</option>
-                ${options.map(opt => `
-                    <option value="${opt}" ${opt === currentValue ? 'selected' : ''}>
-                        ${opt}
-                    </option>
-                `).join('')}
-            `;
-        }
-        
-        // 生成体位选项
-        function generateProjectionOptions(part, currentValue) {
-            const options = PROJECTION_OPTIONS[part] || PROJECTION_OPTIONS['default'];
-            return generateOptions(options, currentValue);
-        }
+
         
         // 标记为已复核
         async function markAsReviewed(imageId, filename) {
@@ -1002,8 +1013,9 @@
                 // 更新UI
                 const card = document.querySelector(`[data-key="${key}"]`);
                 if (card) {
-                    const selects = card.querySelectorAll('select');
-                    selects.forEach(s => s.classList.add('reviewed'));
+                    // 给所有 radio input 添加 reviewed 类
+                    const radios = card.querySelectorAll('input[type="radio"]');
+                    radios.forEach(r => r.classList.add('reviewed'));
                     
                     // 更新badge
                     const filenameDiv = card.querySelector('.image-filename');
@@ -1175,20 +1187,30 @@
             }
         }
         
-        // 处理标签修改
-        async function handleLabelChange(select) {
-            const key = select.dataset.key;
-            const type = select.dataset.type;
-            const imageId = select.dataset.sampleId;
-            const filename = select.dataset.filename;
-            const newValue = select.value;
-            const statusEl = select.nextElementSibling;
+        // 处理单选按钮变更
+        async function handleRadioChange(radio) {
+            const key = radio.dataset.key;
+            const type = radio.dataset.type;
+            const imageId = radio.dataset.sampleId;
+            const filename = radio.dataset.filename;
+            const newValue = radio.value;
+            
+            // 查找对应的状态元素
+            const card = document.querySelector(`[data-key="${imageId}_${filename}"]`);
+            let statusEl;
+            if (type === 'orientation') {
+                statusEl = document.getElementById(`status-${key}-ori`);
+            } else {
+                statusEl = document.getElementById(`status-${key}-proj`);
+            }
             
             if (!newValue) return;
             
             // 显示保存中
-            statusEl.textContent = '保存中...';
-            statusEl.className = 'save-status saving';
+            if (statusEl) {
+                statusEl.textContent = '保存中...';
+                statusEl.className = 'save-status saving';
+            }
             
             try {
                 const data = {
@@ -1206,8 +1228,10 @@
                 const result = await response.json();
                 
                 if (result.success) {
-                    statusEl.innerHTML = '<i class="fa fa-check"></i> 已保存';
-                    statusEl.className = 'save-status saved';
+                    if (statusEl) {
+                        statusEl.innerHTML = '<i class="fa fa-check"></i> 已保存';
+                        statusEl.className = 'save-status saved';
+                    }
                     
                     // 更新内存数据与样式
                     const sample = allSamples.find(s => s.image_id === imageId);
@@ -1221,18 +1245,22 @@
                             img.projection_modified = true;
                         }
                     }
-                    select.classList.add('changed');
+                    
+                    // 给所有同名的 radio 添加 modified 类
+                    document.querySelectorAll(`input[name="${key}"]`).forEach(r => r.classList.add('modified'));
 
                     updateStats();
                     updateProgressBar();
                     
-                    setTimeout(() => { statusEl.textContent = ''; }, 1500);
+                    setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 1500);
                 } else {
                     throw new Error(result.message);
                 }
             } catch (error) {
-                statusEl.textContent = '失败';
-                statusEl.className = 'save-status error';
+                if (statusEl) {
+                    statusEl.textContent = '失败';
+                    statusEl.className = 'save-status error';
+                }
                 showToast('保存失败: ' + error.message, 'error');
             }
         }
