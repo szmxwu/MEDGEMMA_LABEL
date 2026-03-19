@@ -9,6 +9,8 @@ import sys
 import webbrowser
 import threading
 import time
+import shutil
+from datetime import datetime
 from pathlib import Path
 from flask import Flask, render_template, jsonify, request, send_from_directory
 
@@ -18,6 +20,104 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 app = Flask(__name__)
 
 EXCEL_LOCK = threading.Lock()
+
+
+def safe_save_excel(df, excel_path, create_backup=True):
+    """
+    原子方式保存Excel文件，防止写入过程中断导致文件损坏
+    
+    策略:
+    1. 写入临时文件
+    2. 创建备份（可选）
+    3. 原子重命名替换原文件
+    4. 清理临时文件
+    
+    Args:
+        df: pandas DataFrame
+        excel_path: 目标文件路径
+        create_backup: 是否创建备份文件
+    
+    Raises:
+        Exception: 保存失败时抛出异常
+    """
+    excel_path = Path(excel_path)
+    temp_path = excel_path.with_suffix('.tmp')
+    backup_path = excel_path.with_suffix('.xlsx.bak')
+    
+    try:
+        # 1. 写入临时文件
+        df.to_excel(temp_path, index=False)
+        
+        # 验证临时文件写入成功
+        if not temp_path.exists() or temp_path.stat().st_size == 0:
+            raise IOError("临时文件写入失败或为空")
+        
+        # 2. 创建备份（如果原文件存在）
+        if create_backup and excel_path.exists():
+            shutil.copy2(excel_path, backup_path)
+        
+        # 3. 原子重命名（操作系统保证这是原子操作）
+        temp_path.replace(excel_path)
+        
+        # 4. 成功后保留最近10个备份，删除旧的
+        if create_backup:
+            cleanup_old_backups(excel_path.parent, keep_count=10)
+            
+    except Exception as e:
+        # 清理临时文件
+        if temp_path.exists():
+            try:
+                temp_path.unlink()
+            except:
+                pass
+        
+        # 如果原文件丢失但备份存在，尝试恢复
+        if not excel_path.exists() and backup_path.exists():
+            try:
+                backup_path.rename(excel_path)
+                print(f"⚠️  已从备份恢复: {excel_path}")
+            except Exception as restore_error:
+                print(f"❌ 恢复备份失败: {restore_error}")
+        
+        raise Exception(f"保存Excel失败: {str(e)}")
+
+
+def cleanup_old_backups(directory, keep_count=10):
+    """清理旧备份文件，只保留最近的指定数量"""
+    try:
+        backup_files = sorted(
+            Path(directory).glob('*.xlsx.bak'),
+            key=lambda x: x.stat().st_mtime,
+            reverse=True
+        )
+        for old_backup in backup_files[keep_count:]:
+            try:
+                old_backup.unlink()
+            except:
+                pass
+    except:
+        pass  # 清理失败不影响主流程
+
+
+def log_modification(data):
+    """
+    记录修改操作到JSONL日志，用于灾难恢复
+    即使Excel文件损坏，也能从日志重建数据
+    """
+    try:
+        import json
+        log_path = OUTPUTS_DIR / 'modifications.jsonl'
+        OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
+        
+        log_entry = {
+            'timestamp': datetime.now().isoformat(),
+            'data': data
+        }
+        
+        with open(log_path, 'a', encoding='utf-8') as f:
+            f.write(json.dumps(log_entry, ensure_ascii=False) + '\n')
+    except Exception as e:
+        print(f"⚠️  记录修改日志失败: {e}")  # 日志失败不影响主流程
 
 # 配置
 DATA_DIR = Path(__file__).parent / 'data'
@@ -211,8 +311,11 @@ def save_modification():
                 df.loc[mask, 'orientation_modified'] = True
                 df.loc[mask, 'modified_at'] = now_str
 
-            # 写回原Excel文件
-            df.to_excel(excel_path, index=False)
+            # 使用原子写入保存（防止写入中断导致文件损坏）
+            safe_save_excel(df, excel_path, create_backup=True)
+            
+            # 记录修改日志（用于灾难恢复）
+            log_modification(data)
 
         # 更新内存样本，保证刷新后显示一致
         for sample in app_status['samples']:
@@ -269,7 +372,11 @@ def save_review_status():
             df.loc[mask, 'reviewed'] = reviewed
             df.loc[mask, 'reviewed_at'] = now_str
 
-            df.to_excel(excel_path, index=False)
+            # 使用原子写入保存
+            safe_save_excel(df, excel_path, create_backup=True)
+            
+            # 记录批量修改日志
+            log_modification({'type': 'bulk_review', 'items': items})
 
         # 更新内存样本
         for sample in app_status['samples']:
@@ -326,7 +433,11 @@ def save_review_bulk():
                 df.loc[mask, 'reviewed'] = reviewed
                 df.loc[mask, 'reviewed_at'] = now_str if reviewed else ''
 
-            df.to_excel(excel_path, index=False)
+            # 使用原子写入保存
+            safe_save_excel(df, excel_path, create_backup=True)
+            
+            # 记录批量修改日志
+            log_modification({'type': 'bulk_review', 'count': len(items)})
 
         # 更新内存样本
         item_set = {(str(i.get('image_id')), i.get('filename')) for i in items}
@@ -377,7 +488,12 @@ def invalidate_sample_image():
             df.loc[mask, 'is_invalid'] = True
             df.loc[mask, 'invalid_label'] = str(invalid_label)
             df.loc[mask, 'invalid_at'] = now_str
-            df.to_excel(excel_path, index=False)
+            
+            # 使用原子写入保存
+            safe_save_excel(df, excel_path, create_backup=True)
+            
+            # 记录无效标记日志
+            log_modification({'type': 'invalidate', 'image_id': image_id, 'filename': filename})
 
         # 更新内存样本：移除该图片；若样本无图则移除样本
         for sample in list(app_status['samples']):
