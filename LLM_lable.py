@@ -77,7 +77,7 @@ CHECKPOINT_LOCK = threading.Lock()
 CN_EN_MAP = {
     "左": "left", "右": "right", "双": "bilateral",
     # === 拍摄体位 ===
-    "头尾位":"cephalocaudal", "定点压迫位":"spot compression", "腋尾位": "mediolateral oblique",
+    "头尾位":"cephalocaudal", "定点压迫位":"spot compression", "腋尾位": "axillary tail",
     "正位": "frontal", "立位":"frontal", "卧位":"frontal", "柯氏位":"frontal", "瓦氏位":"frontal",
     "开口位":"frontal", "闭口位":"frontal", "穿胸位":"frontal","后前位":"frontal","仰卧位":"frontal","左右弯曲正位": "frontal",
     "左右侧屈正位":"frontal","俯卧位":"frontal", "仰卧位":"frontal", "冠状位":"frontal","负重正位":"frontal",
@@ -365,13 +365,13 @@ def process_single_sample(
                 elif "_L_MLO" in filename:
                     final_orientations[i] = "left"
                     orientation_confidences[i] = 0.95
-                    breast_projections[i] = "mediolateral oblique"
-                    logger.info(f"     图片{i+1} ({filename}): 文件名包含_L_MLO -> left, mediolateral oblique")
+                    breast_projections[i] = "axillary tail"
+                    logger.info(f"     图片{i+1} ({filename}): 文件名包含_L_MLO -> left, axillary tail")
                 elif "_R_MLO" in filename:
                     final_orientations[i] = "right"
                     orientation_confidences[i] = 0.95
-                    breast_projections[i] = "mediolateral oblique"
-                    logger.info(f"     图片{i+1} ({filename}): 文件名包含_R_MLO -> right, mediolateral oblique")
+                    breast_projections[i] = "axillary tail"
+                    logger.info(f"     图片{i+1} ({filename}): 文件名包含_R_MLO -> right, axillary tail")
                 else:
                     # 文件名不包含关键词，保持原值，后续由LLM处理
                     breast_projections[i] = None

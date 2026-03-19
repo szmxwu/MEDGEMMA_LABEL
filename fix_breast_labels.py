@@ -2,7 +2,7 @@
 乳房标签数据修复脚本
 
 问题：已完成的标注中，乳房部位的体位标签使用了通用视角(frontal/lateral/oblique/axial)
-      而不是乳腺X光专用视角(cephalocaudal/mediolateral oblique/spot compression)
+      而不是乳腺X光专用视角(cephalocaudal/axillary tail/spot compression)
 
 修复逻辑：
 1. 读取 processed_labels_v3.xlsx
@@ -99,8 +99,8 @@ def find_breast_samples_by_filename(df: pd.DataFrame) -> pd.DataFrame:
     文件名模式：
     - _L_CC -> left, cephalocaudal
     - _R_CC -> right, cephalocaudal
-    - _L_MLO -> left, mediolateral oblique
-    - _R_MLO -> right, mediolateral oblique
+    - _L_MLO -> left, axillary tail
+    - _R_MLO -> right, axillary tail
     """
     breast_df = df[df['original_part'] == '乳房'].copy()
     
@@ -188,7 +188,7 @@ def fix_single_sample(
                     'original_part': '乳房',
                     'final_body_part': 'Breast',
                     'final_orientation': 'left',
-                    'final_projection': 'mediolateral oblique',
+                    'final_projection': 'axillary tail',
                     'confidence_projection': 0.95,
                     'confidence_orientation': 0.95,
                     'confidence_overall': 0.95,
@@ -209,7 +209,7 @@ def fix_single_sample(
                     'original_part': '乳房',
                     'final_body_part': 'Breast',
                     'final_orientation': 'right',
-                    'final_projection': 'mediolateral oblique',
+                    'final_projection': 'axillary tail',
                     'confidence_projection': 0.95,
                     'confidence_orientation': 0.95,
                     'confidence_overall': 0.95,

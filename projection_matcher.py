@@ -12,7 +12,7 @@ from dataclasses import dataclass
 
 # 定义基础几何视角 (Visual Geometry Standards)
 STANDARD_VIEWS = ["frontal", "lateral", "oblique", "axial"]
-BREAST_VIEWS = ["cephalocaudal", "mediolateral oblique", "spot compression"]  # 乳腺X光常见视角
+BREAST_VIEWS = ["cephalocaudal", "axillary tail", "spot compression"]  # 乳腺X光常见视角
 
 
 def is_breast_body_part(body_part: str) -> bool:
@@ -127,7 +127,7 @@ def parse_scores_from_response(response: str, num_imgs: int, valid_views: List[s
         line_lower = matched_line.lower()
         
         for col_idx, view in enumerate(views):
-            # 对于多单词视角(如"mediolateral oblique"),使用第一个单词匹配
+            # 对于多单词视角(如"axillary tail"),使用第一个单词匹配
             view_key = view.split()[0] if ' ' in view else view
             pattern = view_key + r"[^0-9]*(\d+)"
             match = re.search(pattern, line_lower)
@@ -371,7 +371,7 @@ def predict_projection_globally(
             f"Analyze these {num_imgs} breast mammography images.\n"
             "For EACH image, rate the likelihood (0-10) of it being one of the standard mammographic views:\n"
             "- Cephalocaudal (CC view, top-to-bottom compression)\n"
-            "- Mediolateral oblique (MLO view, angled compression)\n"
+            "- axillary tail (MLO view, angled compression)\n"
             "- Spot compression (focused compression view)\n\n"
             "Output format strict example:\n"
             "Image 1: Cephalocaudal=9, Mediolateral=1, Spot=0\n"

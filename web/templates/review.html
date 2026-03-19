@@ -553,6 +553,17 @@
         <div class="pagination-container" id="pagination">
             <!-- 分页控件将在这里渲染 -->
         </div>
+        
+        <!-- 导航按钮 -->
+        <div class="nav-buttons-container" style="background: white; border-top: 1px solid #e8e8e8; padding: 12px 20px; display: flex; justify-content: center; align-items: center; gap: 20px; flex-shrink: 0;">
+            <button class="btn btn-outline-primary" id="prevPageBtn" onclick="goToPage(currentPage - 1)" style="min-width: 100px;">
+                <i class="fa fa-arrow-left"></i> 上一页
+            </button>
+            <span class="page-info" id="navPageInfo" style="font-size: 14px; color: #666;">1/1页</span>
+            <button class="btn btn-primary" id="nextPageBtn" onclick="nextPageAndReview()" style="min-width: 100px;">
+                下一页 <i class="fa fa-arrow-right"></i>
+            </button>
+        </div>
     </div>
     
     <!-- Toast Container -->
@@ -569,10 +580,14 @@
         let pageSize = 10;
         let reviewedData = new Set();
         
+        // 图像预加载状态
+        let preloadedImages = new Set();  // 已预加载的图像URL集合
+        let isPreloading = false;         // 是否正在预加载中
+        
         // 配置选项
         const PROJECTION_OPTIONS = {
-            'Breast': ['cephalocaudal', 'mediolateral oblique', 'spot compression'],
-            '乳房': ['cephalocaudal', 'mediolateral oblique', 'spot compression'],
+            'Breast': ['cephalocaudal', 'axillary tail', 'spot compression'],
+            '乳房': ['cephalocaudal', 'axillary tail', 'spot compression'],
             'default': ['frontal', 'lateral', 'oblique', 'axial', 'special']
         };
         
@@ -684,6 +699,7 @@
             }
             renderSamples();
             renderPagination();
+            updateNavButtons();
         }
         
         // 渲染样本
@@ -722,6 +738,101 @@
                     </div>
                 </div>
             `}).join('');
+            
+            // 延迟预加载下一页图像（让当前页面优先渲染）
+            setTimeout(() => preloadNextPageImages(), 500);
+        }
+        
+        // 预加载下一页图像
+        function preloadNextPageImages() {
+            if (isPreloading) return;
+            
+            const totalPages = Math.ceil(filteredSamples.length / pageSize);
+            if (currentPage >= totalPages) return;  // 没有下一页了
+            
+            isPreloading = true;
+            
+            // 获取下一页样本
+            const nextPage = currentPage + 1;
+            const start = (nextPage - 1) * pageSize;
+            const end = start + pageSize;
+            const nextPageSamples = filteredSamples.slice(start, end);
+            
+            // 收集需要预加载的图像URL
+            const imageUrls = [];
+            nextPageSamples.forEach(sample => {
+                sample.images.forEach(img => {
+                    if (img.image_url && !preloadedImages.has(img.image_url)) {
+                        imageUrls.push(img.image_url);
+                    }
+                });
+            });
+            
+            if (imageUrls.length === 0) {
+                isPreloading = false;
+                return;
+            }
+            
+            // 批量预加载图像（使用并发限制避免过多请求）
+            const CONCURRENT_LIMIT = 4;  // 同时预加载的最大数量
+            let loadedCount = 0;
+            let failedCount = 0;
+            
+            function preloadBatch(urls) {
+                if (urls.length === 0) {
+                    isPreloading = false;
+                    if (loadedCount > 0) {
+                        console.log(`✓ 预加载完成: ${loadedCount} 张图像成功, ${failedCount} 张失败`);
+                    }
+                    return;
+                }
+                
+                const batch = urls.splice(0, CONCURRENT_LIMIT);
+                let batchCompleted = 0;
+                
+                batch.forEach(url => {
+                    const img = new Image();
+                    
+                    img.onload = () => {
+                        preloadedImages.add(url);
+                        loadedCount++;
+                        batchCompleted++;
+                        if (batchCompleted === batch.length) {
+                            preloadBatch(urls);
+                        }
+                    };
+                    
+                    img.onerror = () => {
+                        failedCount++;
+                        batchCompleted++;
+                        if (batchCompleted === batch.length) {
+                            preloadBatch(urls);
+                        }
+                    };
+                    
+                    // 设置超时避免长时间等待
+                    setTimeout(() => {
+                        // 如果图片仍未加载完成，取消并标记为失败
+                        if (!img.complete) {
+                            img.src = '';  // 取消加载
+                            // 确保不会重复计数
+                            if (img.dataset && !img.dataset.timedOut) {
+                                img.dataset.timedOut = 'true';
+                                failedCount++;
+                                batchCompleted++;
+                                if (batchCompleted === batch.length) {
+                                    preloadBatch(urls);
+                                }
+                            }
+                        }
+                    }, 10000);  // 10秒超时
+                    
+                    img.src = url;
+                });
+            }
+            
+            // 开始预加载
+            preloadBatch(imageUrls);
         }
 
         function getCurrentPageSamples() {
@@ -1182,6 +1293,76 @@
             currentPage = page;
             renderSamples();
             renderPagination();
+            updateNavButtons();
+            document.getElementById('mainContent').scrollTop = 0;
+            // 预加载下一页会在 renderSamples 后自动触发
+        }
+        
+        // 更新导航按钮状态
+        function updateNavButtons() {
+            const totalPages = Math.ceil(filteredSamples.length / pageSize);
+            const prevBtn = document.getElementById('prevPageBtn');
+            const nextBtn = document.getElementById('nextPageBtn');
+            const pageInfo = document.getElementById('navPageInfo');
+            
+            if (prevBtn) prevBtn.disabled = currentPage === 1;
+            if (nextBtn) nextBtn.disabled = currentPage === totalPages || totalPages === 0;
+            if (pageInfo) pageInfo.textContent = `${currentPage}/${totalPages}页`;
+        }
+        
+        // 下一页并自动审核当前页
+        async function nextPageAndReview() {
+            const totalPages = Math.ceil(filteredSamples.length / pageSize);
+            if (currentPage >= totalPages) return;
+            
+            // 先获取当前页面样本（在后台标记为审核）
+            const pageSamples = getCurrentPageSamples();
+            const items = [];
+            
+            pageSamples.forEach(sample => {
+                sample.images.forEach(img => {
+                    const key = `${sample.image_id}_${img.filename}`;
+                    if (!reviewedData.has(key)) {
+                        reviewedData.add(key);
+                        img.reviewed = true;
+                        items.push({ image_id: sample.image_id, filename: img.filename, reviewed: true });
+                    }
+                });
+            });
+            
+            // 后台执行保存操作，不阻塞界面
+            if (items.length > 0) {
+                // 立即更新UI和统计（乐观更新）
+                updateStats();
+                updateProgressBar();
+                
+                // 后台异步保存到服务器
+                fetch('/api/review/bulk', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ items: items })
+                })
+                .then(response => response.json())
+                .then(result => {
+                    if (!result.success) {
+                        console.error('后台保存失败:', result.message);
+                        // 如果失败，在控制台记录但不影响用户体验
+                    }
+                })
+                .catch(error => {
+                    console.error('后台保存请求失败:', error);
+                    // 失败时回滚内存状态（可选，这里选择不回滚以保持界面流畅）
+                });
+                
+                // 显示轻量提示
+                showToast(`已将 ${items.length} 张图片标记为已复核`);
+            }
+            
+            // 立即跳转到下一页，不等待后台请求完成
+            currentPage += 1;
+            renderSamples();  // 这会触发下一页的预加载
+            renderPagination();
+            updateNavButtons();
             document.getElementById('mainContent').scrollTop = 0;
         }
         
@@ -1191,6 +1372,7 @@
             currentPage = 1;
             renderSamples();
             renderPagination();
+            updateNavButtons();
         }
         
         // 更新进度条

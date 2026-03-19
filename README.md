@@ -369,7 +369,7 @@ python fix_breast_labels.py --limit 10
 3. **修改标签**:
    - 方位(Orientation): 选择 left/right/bilateral/Not Applicable
    - 体位(Projection): 根据部位显示不同选项
-     - Breast/乳房: cephalocaudal, mediolateral oblique, spot compression
+     - Breast/乳房: cephalocaudal, axillary tail, spot compression
      - 其他: frontal, lateral, oblique, axial, special
 4. **自动保存**: 修改后自动保存，显示"✓ 已保存"
 5. **导出结果**: 点击"导出结果"按钮下载JSON文件

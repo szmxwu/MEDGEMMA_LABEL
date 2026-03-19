@@ -120,7 +120,7 @@
     "Position_orientation":[]},
     "乳房": {"exam_projection":[
         "cephalocaudal",
-        "mediolateral oblique",
+        "axillary tail",
         "spot compression"
     ],
     "Position_orientation":["left","right","bilateral"]},
