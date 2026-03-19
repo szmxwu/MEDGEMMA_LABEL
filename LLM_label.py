@@ -96,7 +96,7 @@ def setup_logging(rank: int = 0):
 # ================= 中英文映射 (from LLM_lable.py) =================
 CN_EN_MAP = {
     "左": "left", "右": "right", "双": "bilateral",
-    "头尾位": "cephalocaudal", "定点压迫位": "spot compression", "腋尾位": "mediolateral oblique",
+    "头尾位": "cephalocaudal", "定点压迫位": "spot compression", "腋尾位": "axillary tail",
     "正位": "frontal", "立位": "frontal", "卧位": "frontal", "柯氏位": "frontal", "瓦氏位": "frontal",
     "开口位": "frontal", "闭口位": "frontal", "穿胸位": "frontal", "后前位": "frontal", "仰卧位": "frontal",
     "左右弯曲正位": "frontal", "左右侧屈正位": "frontal", "俯卧位": "frontal", "冠状位": "frontal",
@@ -765,7 +765,7 @@ def build_breast_scoring_prompt(num_imgs: int) -> str:
         f"Analyze these {num_imgs} breast mammography images.\n"
         "For EACH image, rate the likelihood (0-10) of it being one of the standard mammographic views:\n"
         "- Cephalocaudal (CC view, top-to-bottom compression)\n"
-        "- Mediolateral oblique (MLO view, angled compression)\n"
+        "- axillary tail (MLO view, angled compression)\n"
         "- Spot compression (focused compression view)\n\n"
         "Output format strict example:\n"
         "Image 1: Cephalocaudal=9, Mediolateral=1, Spot=0\n"
@@ -833,9 +833,9 @@ def phase0_prescan(df: pd.DataFrame, part_config: Dict) -> List[SampleData]:
                 elif "_R_CC" in fn:
                     s.breast_matches[i] = ("right", "cephalocaudal")
                 elif "_L_MLO" in fn:
-                    s.breast_matches[i] = ("left", "mediolateral oblique")
+                    s.breast_matches[i] = ("left", "axillary tail")
                 elif "_R_MLO" in fn:
-                    s.breast_matches[i] = ("right", "mediolateral oblique")
+                    s.breast_matches[i] = ("right", "axillary tail")
             for i, (ori, proj) in s.breast_matches.items():
                 s.final_orientations[i] = ori
                 s.orientation_confidences[i] = 0.95
@@ -1265,9 +1265,9 @@ def _filename_breast_fix(filename: str) -> Optional[Dict[str, str]]:
     if "_R_CC" in fn:
         return {"orientation": "right", "projection": "cephalocaudal"}
     if "_L_MLO" in fn:
-        return {"orientation": "left", "projection": "mediolateral oblique"}
+        return {"orientation": "left", "projection": "axillary tail"}
     if "_R_MLO" in fn:
-        return {"orientation": "right", "projection": "mediolateral oblique"}
+        return {"orientation": "right", "projection": "axillary tail"}
     return None
 
 

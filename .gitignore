@@ -197,6 +197,8 @@ download
 failed_samples_*
 data/*
 .vscode
-
+CLAUDE.md
 *.jsonl
 *.xlsx
+processed_labels*.xlsx
+processing_checkpoint.json
