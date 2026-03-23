@@ -914,7 +914,7 @@
                 return `
                 <div class="image-card" data-key="${key}">
                     <div class="image-wrapper">
-                        <button class="invalid-btn" title="标记为无效样本并删除" onclick="invalidateImage('${sample.image_id}', '${img.filename}')">×</button>
+                        <button class="invalid-btn" title="标记为无效样本并删除" onclick="invalidateImage('${escapeJs(sample.image_id)}', '${escapeJs(img.filename)}')">×</button>
                         <img src="${img.image_url}" 
                              alt="${img.filename}"
                              onerror="this.src='{{ url_for('static', filename='images/placeholder.png') }}'">
@@ -950,7 +950,7 @@
                 return `
                 <div class="image-card" data-key="${key}">
                     <div class="image-wrapper">
-                        <button class="invalid-btn" title="标记为无效样本并删除" onclick="invalidateImage('${sample.image_id}', '${img.filename}')">×</button>
+                        <button class="invalid-btn" title="标记为无效样本并删除" onclick="invalidateImage('${escapeJs(sample.image_id)}', '${escapeJs(img.filename)}')">×</button>
                         <img src="${img.image_url}" 
                              alt="${img.filename}"
                              onerror="this.src='{{ url_for('static', filename='images/placeholder.png') }}'">
@@ -984,6 +984,18 @@
                 .replace(/"/g, '&quot;')
                 .replace(/'/g, '&#39;');
         }
+        
+        // 转义JavaScript字符串中的特殊字符
+        function escapeJs(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/\\/g, '\\\\')
+                .replace(/'/g, "\\'")
+                .replace(/"/g, '\\"')
+                .replace(/\n/g, '\\n')
+                .replace(/\r/g, '\\r')
+                .replace(/\t/g, '\\t');
+        }
 
         // 检查 review_reason 是否为有效字符串（非空、非 NaN）
         function isValidReason(s) {
@@ -996,7 +1008,38 @@
             return true;
         }
         
-
+        // 生成单选按钮组
+        function generateRadioGroup(options, currentValue, name, type, sampleId, filename, isModified, isReviewed) {
+            const modifiedClass = isModified ? 'modified' : '';
+            const reviewedClass = isReviewed ? 'reviewed' : '';
+            return `
+                <div class="radio-group">
+                    ${options.map(opt => `
+                        <div class="radio-btn">
+                            <input type="radio" 
+                                   id="${name}_${opt}" 
+                                   name="${name}" 
+                                   value="${opt}" 
+                                   ${opt === currentValue ? 'checked' : ''}
+                                   class="${modifiedClass} ${reviewedClass}"
+                                   data-type="${escapeHtml(type)}"
+                                   data-sample-id="${escapeHtml(sampleId)}"
+                                   data-filename="${escapeHtml(filename)}"
+                                   data-key="${escapeHtml(name)}"
+                                   onclick="markAsReviewed('${escapeJs(sampleId)}', '${escapeJs(filename)}')"
+                                   onchange="handleRadioChange(this)">
+                            <label for="${name}_${opt}">${opt}</label>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+        
+        // 生成体位单选按钮组
+        function generateProjectionRadioGroup(part, currentValue, name, type, sampleId, filename, isModified, isReviewed) {
+            const options = PROJECTION_OPTIONS[part] || PROJECTION_OPTIONS['default'];
+            return generateRadioGroup(options, currentValue, name, type, sampleId, filename, isModified, isReviewed);
+        }
         
         // 标记为已复核
         async function markAsReviewed(imageId, filename) {
@@ -1037,10 +1080,8 @@
                 // 更新样本header
                 updateSampleHeader(imageId);
 
-                const reviewFilter = document.getElementById('reviewFilter').value;
-                if (reviewFilter === 'needs_review') {
-                    filterSamples(false);
-                }
+                // 注意：不再自动刷新页面，等翻页时再刷新
+                // 这样可以避免误操作丢失当前图片焦点
 
                 try {
                     const response = await fetch('/api/review', {
@@ -1100,14 +1141,8 @@
                     updateStats();
                     updateProgressBar();
 
-                    const reviewFilter = document.getElementById('reviewFilter').value;
-                    if (reviewFilter === 'needs_review') {
-                        filterSamples(false);
-                    } else {
-                        renderSamples();
-                        renderPagination();
-                    }
-
+                    // 不再自动刷新页面，保持当前视图
+                    // 等翻页时再根据筛选条件刷新
                     showToast(`已复核 ${updatedCount} 张图片`);
                 })
                 .catch(error => {
@@ -1319,8 +1354,17 @@
             if (page < 1 || page > totalPages) return;
             
             currentPage = page;
-            renderSamples();
-            renderPagination();
+            
+            // 翻页时根据筛选条件刷新
+            // 如果筛选条件是"需复核"或"已复核"，重新执行筛选以更新显示
+            const reviewFilter = document.getElementById('reviewFilter').value;
+            if (reviewFilter === 'needs_review' || reviewFilter === 'reviewed') {
+                filterSamples(false);  // false表示不重置页码
+            } else {
+                renderSamples();
+                renderPagination();
+            }
+            
             updateNavButtons();
             document.getElementById('mainContent').scrollTop = 0;
             // 预加载下一页会在 renderSamples 后自动触发
@@ -1388,8 +1432,16 @@
             
             // 立即跳转到下一页，不等待后台请求完成
             currentPage += 1;
-            renderSamples();  // 这会触发下一页的预加载
-            renderPagination();
+            
+            // 翻页时根据筛选条件刷新
+            const reviewFilter = document.getElementById('reviewFilter').value;
+            if (reviewFilter === 'needs_review' || reviewFilter === 'reviewed') {
+                filterSamples(false);  // 重新筛选并显示下一页
+            } else {
+                renderSamples();  // 这会触发下一页的预加载
+                renderPagination();
+            }
+            
             updateNavButtons();
             document.getElementById('mainContent').scrollTop = 0;
         }

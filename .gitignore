@@ -199,6 +199,5 @@ data/*
 .vscode
 CLAUDE.md
 *.jsonl
-*.xlsx
-processed_labels*.xlsx
 processing_checkpoint.json
+processed_labels_v3_v260302_MedGamma27B*

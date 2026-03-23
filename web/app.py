@@ -375,8 +375,8 @@ def save_review_status():
             # 使用原子写入保存
             safe_save_excel(df, excel_path, create_backup=True)
             
-            # 记录批量修改日志
-            log_modification({'type': 'bulk_review', 'items': items})
+            # 记录复核日志
+            log_modification({'type': 'review', 'image_id': image_id, 'filename': filename, 'reviewed': reviewed})
 
         # 更新内存样本
         for sample in app_status['samples']:
