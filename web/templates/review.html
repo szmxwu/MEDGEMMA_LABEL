@@ -732,6 +732,12 @@
             const partFilter = document.getElementById('partFilter').value;
             const reviewFilter = document.getElementById('reviewFilter').value;
             
+            // 筛选条件变化时，清空预加载缓存（因为页面内容已变）
+            if (resetPage) {
+                preloadedImages.clear();
+                console.log('筛选条件变化，已清空预加载缓存');
+            }
+            
             filteredSamples = allSamples.filter(sample => {
                 // 部位筛选
                 if (partFilter && sample.original_part !== partFilter) {
@@ -803,38 +809,44 @@
             setTimeout(() => preloadNextPageImages(), 500);
         }
         
-        // 预加载下一页图像
+        // 预加载后续3页图像
         function preloadNextPageImages() {
             if (isPreloading) return;
             
             const totalPages = Math.ceil(filteredSamples.length / pageSize);
-            if (currentPage >= totalPages) return;  // 没有下一页了
+            if (currentPage >= totalPages) return;  // 没有后续页面了
             
             isPreloading = true;
             
-            // 获取下一页样本
-            const nextPage = currentPage + 1;
-            const start = (nextPage - 1) * pageSize;
-            const end = start + pageSize;
-            const nextPageSamples = filteredSamples.slice(start, end);
+            // 获取后续3页的样本（服务器内存充足，预加载更多）
+            const pagesToPreload = 3;
+            const startPage = currentPage + 1;
+            const endPage = Math.min(currentPage + pagesToPreload, totalPages);
             
-            // 收集需要预加载的图像URL
             const imageUrls = [];
-            nextPageSamples.forEach(sample => {
-                sample.images.forEach(img => {
-                    if (img.image_url && !preloadedImages.has(img.image_url)) {
-                        imageUrls.push(img.image_url);
-                    }
+            for (let page = startPage; page <= endPage; page++) {
+                const start = (page - 1) * pageSize;
+                const end = start + pageSize;
+                const pageSamples = filteredSamples.slice(start, end);
+                
+                pageSamples.forEach(sample => {
+                    sample.images.forEach(img => {
+                        if (img.image_url && !preloadedImages.has(img.image_url)) {
+                            imageUrls.push(img.image_url);
+                        }
+                    });
                 });
-            });
+            }
             
             if (imageUrls.length === 0) {
                 isPreloading = false;
                 return;
             }
             
-            // 批量预加载图像（使用并发限制避免过多请求）
-            const CONCURRENT_LIMIT = 4;  // 同时预加载的最大数量
+            console.log(`开始预加载第 ${startPage}-${endPage} 页，共 ${imageUrls.length} 张图像`);
+            
+            // 批量预加载图像（服务器内存充足，增加并发数）
+            const CONCURRENT_LIMIT = 8;  // 同时预加载的最大数量（服务器内存充足）
             let loadedCount = 0;
             let failedCount = 0;
             
@@ -1162,38 +1174,73 @@
                 });
         }
 
-        // 标记图片为无效样本并删除
+        // 标记图片为无效样本并删除（乐观更新，后台异步处理）
         async function invalidateImage(imageId, filename) {
             const confirmed = window.confirm(`确认将 ${filename} 标记为无效样本并删除吗？`);
             if (!confirmed) return;
 
-            try {
-                const response = await fetch('/api/invalidate', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ image_id: imageId, filename: filename, invalid_label: 'invalid_sample' })
-                });
-                const result = await response.json();
-                if (!result.success) {
+            const key = `${imageId}_${filename}`;
+            
+            // 1. 立即乐观更新UI（不等待后台）
+            const sample = allSamples.find(s => s.image_id === imageId);
+            if (!sample) return;
+            
+            // 保存原始状态以便失败时恢复
+            const originalImages = [...sample.images];
+            const originalAllSamples = [...allSamples];
+            
+            // 立即从内存中移除
+            reviewedData.delete(key);
+            sample.images = sample.images.filter(img => img.filename !== filename);
+            if (sample.images.length === 0) {
+                allSamples = allSamples.filter(s => s.image_id !== imageId);
+            }
+            
+            // 立即刷新UI
+            updateStats();
+            filterSamples(false);
+            updateProgressBar();
+            
+            // 2. 后台异步处理（不阻塞用户）
+            fetch('/api/invalidate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image_id: imageId, filename: filename, invalid_label: 'invalid_sample' })
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (result.success) {
+                    // 静默成功提示（右下角小提示，不中断工作）
+                    showSilentToast(`已删除: ${filename.substring(0, 30)}${filename.length > 30 ? '...' : ''}`);
+                } else {
                     throw new Error(result.message || '标记失败');
                 }
-
-                const key = `${imageId}_${filename}`;
-                reviewedData.delete(key);
-
-                const sample = allSamples.find(s => s.image_id === imageId);
-                if (sample) {
-                    sample.images = sample.images.filter(img => img.filename !== filename);
-                }
-                allSamples = allSamples.filter(s => s.images && s.images.length > 0);
-
+            })
+            .catch(error => {
+                // 后台失败，恢复原始状态
+                console.error('删除失败:', error);
+                sample.images = originalImages;
+                allSamples = originalAllSamples;
                 updateStats();
                 filterSamples(false);
                 updateProgressBar();
-                showToast('已标记无效并删除该图片');
-            } catch (error) {
-                showToast('删除失败: ' + error.message, 'error');
-            }
+                showToast('删除失败（已恢复）: ' + error.message, 'error');
+            });
+        }
+        
+        // 静默提示（右下角小提示，自动消失，不中断用户）
+        function showSilentToast(message, duration = 2000) {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = 'toast show silent-toast';
+            toast.style.cssText = 'background: rgba(0,0,0,0.6); font-size: 12px; padding: 6px 12px;';
+            toast.innerHTML = `<i class="fa fa-check" style="margin-right: 5px;"></i> ${message}`;
+            container.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => toast.remove(), 300);
+            }, duration);
         }
         
         // 更新样本header状态
@@ -1382,12 +1429,12 @@
             if (pageInfo) pageInfo.textContent = `${currentPage}/${totalPages}页`;
         }
         
-        // 下一页并自动审核当前页
+        // 下一页并自动审核当前页（优化版：先翻页，后处理）
         async function nextPageAndReview() {
             const totalPages = Math.ceil(filteredSamples.length / pageSize);
             if (currentPage >= totalPages) return;
             
-            // 先获取当前页面样本（在后台标记为审核）
+            // 1. 先快速收集当前页需要审核的项目（不更新UI）
             const pageSamples = getCurrentPageSamples();
             const items = [];
             
@@ -1402,48 +1449,51 @@
                 });
             });
             
-            // 后台执行保存操作，不阻塞界面
-            if (items.length > 0) {
-                // 立即更新UI和统计（乐观更新）
-                updateStats();
-                updateProgressBar();
-                
-                // 后台异步保存到服务器
-                fetch('/api/review/bulk', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ items: items })
-                })
-                .then(response => response.json())
-                .then(result => {
-                    if (!result.success) {
-                        console.error('后台保存失败:', result.message);
-                        // 如果失败，在控制台记录但不影响用户体验
-                    }
-                })
-                .catch(error => {
-                    console.error('后台保存请求失败:', error);
-                    // 失败时回滚内存状态（可选，这里选择不回滚以保持界面流畅）
-                });
-                
-                // 显示轻量提示
-                showToast(`已将 ${items.length} 张图片标记为已复核`);
-            }
-            
-            // 立即跳转到下一页，不等待后台请求完成
+            // 2. 立即翻页（优先保证用户体验）
             currentPage += 1;
             
-            // 翻页时根据筛选条件刷新
-            const reviewFilter = document.getElementById('reviewFilter').value;
-            if (reviewFilter === 'needs_review' || reviewFilter === 'reviewed') {
-                filterSamples(false);  // 重新筛选并显示下一页
-            } else {
-                renderSamples();  // 这会触发下一页的预加载
-                renderPagination();
-            }
-            
-            updateNavButtons();
-            document.getElementById('mainContent').scrollTop = 0;
+            // 使用 requestAnimationFrame 确保翻页渲染优先
+            requestAnimationFrame(() => {
+                // 翻页时根据筛选条件刷新
+                const reviewFilter = document.getElementById('reviewFilter').value;
+                if (reviewFilter === 'needs_review' || reviewFilter === 'reviewed') {
+                    filterSamples(false);
+                } else {
+                    renderSamples();
+                    renderPagination();
+                }
+                
+                updateNavButtons();
+                document.getElementById('mainContent').scrollTop = 0;
+                
+                // 3. 翻页后再异步处理统计和保存（不阻塞用户）
+                if (items.length > 0) {
+                    // 延迟执行统计更新，避免阻塞翻页
+                    setTimeout(() => {
+                        updateStats();
+                        updateProgressBar();
+                        
+                        // 后台异步保存到服务器
+                        fetch('/api/review/bulk', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ items: items })
+                        })
+                        .then(response => response.json())
+                        .then(result => {
+                            if (!result.success) {
+                                console.error('后台保存失败:', result.message);
+                            }
+                        })
+                        .catch(error => {
+                            console.error('后台保存请求失败:', error);
+                        });
+                        
+                        // 静默提示，不干扰用户
+                        showSilentToast(`已复核 ${items.length} 张`);
+                    }, 100);  // 短暂延迟确保翻页渲染完成
+                }
+            });
         }
         
         // 改变页大小
