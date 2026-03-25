@@ -134,6 +134,16 @@
             margin-left: 10px;
         }
         
+        .sample-source-part {
+            background: #f6ffed;
+            color: #52c41a;
+            padding: 3px 10px;
+            border-radius: 4px;
+            font-size: 13px;
+            margin-left: 8px;
+            border: 1px solid #b7eb8f;
+        }
+        
         .review-badge {
             background: #fff2f0;
             color: #ff4d4f;
@@ -439,6 +449,72 @@
             margin-left: 10px;
         }
         
+        /* 图片放大模态框 */
+        .image-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.92);
+            z-index: 10000;
+            justify-content: center;
+            align-items: center;
+            cursor: zoom-out;
+        }
+        
+        .image-modal.active {
+            display: flex;
+        }
+        
+        .image-modal img {
+            max-width: 95%;
+            max-height: 95%;
+            object-fit: contain;
+            border-radius: 4px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+        }
+        
+        .image-modal .close-btn {
+            position: absolute;
+            top: 20px;
+            right: 30px;
+            color: white;
+            font-size: 36px;
+            cursor: pointer;
+            opacity: 0.8;
+            transition: opacity 0.2s;
+        }
+        
+        .image-modal .close-btn:hover {
+            opacity: 1;
+        }
+        
+        .image-modal .image-info {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            font-size: 14px;
+            background: rgba(0,0,0,0.6);
+            padding: 8px 16px;
+            border-radius: 4px;
+            max-width: 90%;
+            text-align: center;
+        }
+        
+        /* 图片可点击提示 */
+        .image-wrapper img {
+            cursor: zoom-in;
+            transition: transform 0.2s;
+        }
+        
+        .image-wrapper img:hover {
+            transform: scale(1.02);
+        }
+        
         /* Toast */
         .toast-container {
             position: fixed;
@@ -626,6 +702,13 @@
         </div>
     </div>
     
+    <!-- 图片放大模态框 -->
+    <div class="image-modal" id="imageModal" onclick="closeImageModal()">
+        <span class="close-btn">&times;</span>
+        <img id="modalImage" src="" alt="放大图像">
+        <div class="image-info" id="modalImageInfo"></div>
+    </div>
+    
     <!-- Toast Container -->
     <div class="toast-container" id="toastContainer"></div>
     
@@ -794,6 +877,7 @@
                         <div>
                             <span class="sample-id">${sample.image_id}</span>
                             <span class="sample-part">${sample.original_part}</span>
+                            ${sample.part && sample.part !== sample.original_part ? `<span class="sample-source-part" title="原始检查部位">${sample.part}</span>` : ''}
                             ${hasNeedsReview ? '<span class="review-badge ms-2"><i class="fa fa-exclamation-triangle"></i> 需复核</span>' : ''}
                             ${allReviewed ? '<span class="reviewed-badge ms-2"><i class="fa fa-check"></i> 已复核</span>' : ''}
                         </div>
@@ -809,19 +893,18 @@
             setTimeout(() => preloadNextPageImages(), 500);
         }
         
-        // 预加载后续3页图像
+        // 预加载当前页面、前后各3页图像（支持快速前进后退）
         function preloadNextPageImages() {
             if (isPreloading) return;
             
             const totalPages = Math.ceil(filteredSamples.length / pageSize);
-            if (currentPage >= totalPages) return;  // 没有后续页面了
             
             isPreloading = true;
             
-            // 获取后续3页的样本（服务器内存充足，预加载更多）
+            // 获取当前页、前3页和后3页的样本
             const pagesToPreload = 3;
-            const startPage = currentPage + 1;
-            const endPage = Math.min(currentPage + pagesToPreload, totalPages);
+            const startPage = Math.max(1, currentPage - pagesToPreload);  // 前3页
+            const endPage = Math.min(currentPage + pagesToPreload, totalPages);  // 后3页
             
             const imageUrls = [];
             for (let page = startPage; page <= endPage; page++) {
@@ -843,7 +926,8 @@
                 return;
             }
             
-            console.log(`开始预加载第 ${startPage}-${endPage} 页，共 ${imageUrls.length} 张图像`);
+            const pageDesc = startPage === endPage ? `第 ${startPage} 页` : `第 ${startPage}-${endPage} 页`;
+            console.log(`开始预加载${pageDesc}（含当前页前后各3页），共 ${imageUrls.length} 张图像`);
             
             // 批量预加载图像（服务器内存充足，增加并发数）
             const CONCURRENT_LIMIT = 8;  // 同时预加载的最大数量（服务器内存充足）
@@ -928,8 +1012,10 @@
                     <div class="image-wrapper">
                         <button class="invalid-btn" title="标记为无效样本并删除" onclick="invalidateImage('${escapeJs(sample.image_id)}', '${escapeJs(img.filename)}')">×</button>
                         <img src="${img.image_url}" 
-                             alt="${img.filename}"
-                             onerror="this.src='{{ url_for('static', filename='images/placeholder.png') }}'">
+                             alt="${escapeHtml(img.filename)}"
+                             onclick="openImageModal('${escapeJs(img.image_url)}', '${escapeJs(img.filename)}', '${escapeJs(sample.image_id)}')"
+                             onload="if(window.debugImages) console.log('✓ 图片加载:', this.alt.substring(0, 30))"
+                             onerror="console.error('❌ 图片失败:', '${escapeJs(img.filename)}'.substring(0, 40)); this.src='{{ url_for('static', filename='images/placeholder.png') }}'">
                     </div>
                     <div class="image-info">
                         <div class="image-filename">
@@ -964,8 +1050,10 @@
                     <div class="image-wrapper">
                         <button class="invalid-btn" title="标记为无效样本并删除" onclick="invalidateImage('${escapeJs(sample.image_id)}', '${escapeJs(img.filename)}')">×</button>
                         <img src="${img.image_url}" 
-                             alt="${img.filename}"
-                             onerror="this.src='{{ url_for('static', filename='images/placeholder.png') }}'">
+                             alt="${escapeHtml(img.filename)}"
+                             onclick="openImageModal('${escapeJs(img.image_url)}', '${escapeJs(img.filename)}', '${escapeJs(sample.image_id)}')"
+                             onload="if(window.debugImages) console.log('✓ 图片加载:', this.alt.substring(0, 30))"
+                             onerror="console.error('❌ 图片失败:', '${escapeJs(img.filename)}'.substring(0, 40)); this.src='{{ url_for('static', filename='images/placeholder.png') }}'">
                     </div>
                     <div class="image-info">
                         <div class="image-filename">
@@ -1191,14 +1279,33 @@
             
             // 立即从内存中移除
             reviewedData.delete(key);
-            sample.images = sample.images.filter(img => img.filename !== filename);
-            if (sample.images.length === 0) {
-                allSamples = allSamples.filter(s => s.image_id !== imageId);
-            }
+            
+            // 同时更新 allSamples 和 filteredSamples
+            allSamples = allSamples.map(s => {
+                if (s.image_id === imageId) {
+                    return {
+                        ...s,
+                        images: s.images.filter(img => img.filename !== filename)
+                    };
+                }
+                return s;
+            }).filter(s => s.images.length > 0);
+            
+            // 同时更新 filteredSamples
+            filteredSamples = filteredSamples.map(s => {
+                if (s.image_id === imageId) {
+                    return {
+                        ...s,
+                        images: s.images.filter(img => img.filename !== filename)
+                    };
+                }
+                return s;
+            }).filter(s => s.images.length > 0);
             
             // 立即刷新UI
             updateStats();
-            filterSamples(false);
+            renderSamples();
+            renderPagination();
             updateProgressBar();
             
             // 2. 后台异步处理（不阻塞用户）
@@ -1269,7 +1376,7 @@
             }
         }
         
-        // 处理单选按钮变更
+        // 处理单选按钮变更（乐观更新版）
         async function handleRadioChange(radio) {
             const key = radio.dataset.key;
             const type = radio.dataset.type;
@@ -1277,74 +1384,138 @@
             const filename = radio.dataset.filename;
             const newValue = radio.value;
             
-            // 查找对应的状态元素
-            const card = document.querySelector(`[data-key="${imageId}_${filename}"]`);
-            let statusEl;
-            if (type === 'orientation') {
-                statusEl = document.getElementById(`status-${key}-ori`);
-            } else {
-                statusEl = document.getElementById(`status-${key}-proj`);
-            }
-            
             if (!newValue) return;
             
-            // 显示保存中
+            // 查找对应的状态元素
+            let statusElId = type === 'orientation' ? `status-${key}-ori` : `status-${key}-proj`;
+            let statusEl = document.getElementById(statusElId);
+            
+            // 1. 立即乐观更新UI（不等待后台）
             if (statusEl) {
-                statusEl.textContent = '保存中...';
-                statusEl.className = 'save-status saving';
+                statusEl.innerHTML = '<i class="fa fa-check"></i> 已保存';
+                statusEl.className = 'save-status saved';
             }
             
-            try {
-                const data = {
-                    image_id: imageId,
-                    filename: filename
-                };
-                data[type] = newValue;
-                
-                const response = await fetch('/api/save', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(data)
-                });
-                
+            // 立即更新内存数据
+            const sample = allSamples.find(s => s.image_id === imageId);
+            const img = sample?.images.find(i => i.filename === filename);
+            if (img) {
+                if (type === 'orientation') {
+                    img.final_orientation = newValue;
+                    img.orientation_modified = true;
+                } else if (type === 'projection') {
+                    img.final_projection = newValue;
+                    img.projection_modified = true;
+                }
+            }
+            
+            // 给所有同名的 radio 添加 modified 类
+            document.querySelectorAll(`input[name="${key}"]`).forEach(r => r.classList.add('modified'));
+            
+            // 延迟执行统计更新，避免阻塞交互
+            requestAnimationFrame(() => {
+                updateStats();
+                updateProgressBar();
+            });
+            
+            // 2. 后台异步保存（带冲突检测）
+            // 获取客户端当前修改时间（用于并发检测）
+            const clientModifiedAt = img?.modified_at || '';
+            
+            // 更新状态为保存中
+            if (statusEl) {
+                statusEl.innerHTML = '<i class="fa fa-spinner fa-spin"></i>';
+            }
+            
+            const data = { 
+                image_id: imageId, 
+                filename: filename,
+                client_modified_at: clientModifiedAt
+            };
+            data[type] = newValue;
+            
+            fetch('/api/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            })
+            .then(async response => {
                 const result = await response.json();
                 
-                if (result.success) {
+                if (response.status === 409 && result.conflict) {
+                    // 冲突！需要处理
+                    handleConflict(imageId, filename, type, result.conflict_fields, key);
                     if (statusEl) {
-                        statusEl.innerHTML = '<i class="fa fa-check"></i> 已保存';
-                        statusEl.className = 'save-status saved';
+                        statusEl.innerHTML = '<i class="fa fa-exclamation-triangle"></i> 冲突';
+                        statusEl.className = 'save-status error';
                     }
-                    
-                    // 更新内存数据与样式
-                    const sample = allSamples.find(s => s.image_id === imageId);
-                    const img = sample?.images.find(i => i.filename === filename);
-                    if (img) {
-                        if (type === 'orientation') {
-                            img.final_orientation = newValue;
-                            img.orientation_modified = true;
-                        } else if (type === 'projection') {
-                            img.final_projection = newValue;
-                            img.projection_modified = true;
-                        }
+                    return;
+                }
+                
+                if (result.success) {
+                    // 保存成功，更新服务器返回的修改时间
+                    if (img && result.modified_at) {
+                        img.modified_at = result.modified_at;
                     }
-                    
-                    // 给所有同名的 radio 添加 modified 类
-                    document.querySelectorAll(`input[name="${key}"]`).forEach(r => r.classList.add('modified'));
-
-                    updateStats();
-                    updateProgressBar();
-                    
-                    setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 1500);
+                    if (statusEl) {
+                        statusEl.innerHTML = '<i class="fa fa-check"></i>';
+                        setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 2000);
+                    }
                 } else {
                     throw new Error(result.message);
                 }
-            } catch (error) {
+            })
+            .catch(error => {
+                console.error('保存失败:', error);
                 if (statusEl) {
                     statusEl.textContent = '失败';
                     statusEl.className = 'save-status error';
                 }
-                showToast('保存失败: ' + error.message, 'error');
-            }
+            });
+        }
+        
+        // 处理保存冲突
+        function handleConflict(imageId, filename, changedType, conflictFields, radioKey) {
+            const sample = allSamples.find(s => s.image_id === imageId);
+            const img = sample?.images.find(i => i.filename === filename);
+            if (!img) return;
+            
+            // 构建冲突提示信息
+            let conflictMsg = '该记录已被其他用户修改：\n\n';
+            let hasCurrentFieldConflict = false;
+            
+            conflictFields.forEach(field => {
+                const fieldName = field.field === 'final_projection' ? '体位' : '方位';
+                conflictMsg += `• ${fieldName} 被改为：${field.server_value}\n`;
+                conflictMsg += `  你的修改：${field.client_value}\n\n`;
+                
+                // 检查是否是当前用户修改的字段
+                if ((field.field === 'final_projection' && changedType === 'projection') ||
+                    (field.field === 'final_orientation' && changedType === 'orientation')) {
+                    hasCurrentFieldConflict = true;
+                }
+            });
+            
+            conflictMsg += '点击确定接受服务器版本并刷新';
+            
+            // 显示冲突提示
+            showToast('保存冲突：该记录已被其他用户修改', 'error');
+            
+            // 延迟弹出确认框
+            setTimeout(() => {
+                if (confirm(conflictMsg)) {
+                    // 用户选择接受服务器版本
+                    conflictFields.forEach(field => {
+                        if (field.field === 'final_projection') {
+                            img.final_projection = field.server_value;
+                        } else if (field.field === 'final_orientation') {
+                            img.final_orientation = field.server_value;
+                        }
+                    });
+                    // 重新渲染
+                    renderSamples();
+                }
+            }, 100);
         }
         
         // 渲染分页
@@ -1549,6 +1720,35 @@
                 showToast('导出失败: ' + error.message, 'error');
             }
         }
+        
+        // 图片放大功能
+        function openImageModal(imageUrl, filename, imageId) {
+            const modal = document.getElementById('imageModal');
+            const modalImg = document.getElementById('modalImage');
+            const modalInfo = document.getElementById('modalImageInfo');
+            
+            modalImg.src = imageUrl;
+            modalInfo.textContent = `影像号: ${imageId} | 文件名: ${filename}`;
+            modal.classList.add('active');
+            
+            // 防止背景滚动
+            document.body.style.overflow = 'hidden';
+        }
+        
+        function closeImageModal() {
+            const modal = document.getElementById('imageModal');
+            modal.classList.remove('active');
+            
+            // 恢复背景滚动
+            document.body.style.overflow = '';
+        }
+        
+        // 键盘ESC关闭模态框
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeImageModal();
+            }
+        });
     </script>
 </body>
 </html>

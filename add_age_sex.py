@@ -45,7 +45,7 @@ def merge_excel_files(corpus_dir: str = None) -> pd.DataFrame:
     print(f"📂 发现 {len(excel_files)} 个数据文件: {excel_files}")
     
     # 只读取需要的列，减少内存占用
-    usecols = ['影像号', '年龄', '性别']
+    usecols = ['影像号', '年龄', '性别','部位']
     dataframes = []
     for file in excel_files:
         try:
@@ -182,8 +182,10 @@ def create_lookup_dict(combined_df):
     for _, row in tqdm(combined_df.iterrows(), total=len(combined_df), desc="构建索引"):
         image_id = str(row['影像号']).strip()
         age_cat = row['年龄分类']
+        age_int=row['年龄数值']
         sex = row['性别标准']
-        lookup[image_id] = (age_cat, sex)
+        part=row['部位']
+        lookup[image_id] = (age_cat, sex, age_int,part)
     
     print(f"✅ 查找字典创建完成: {len(lookup)} 条记录")
     return lookup
@@ -207,7 +209,8 @@ def add_age_sex_to_processed(processed_file: str, combined_df: pd.DataFrame, out
     # 初始化新列
     df['age'] = None
     df['sex'] = None
-    
+    df['age_int']=None
+    df['part']=None
     # 统计
     matched_count = 0
     unmatched_count = 0
@@ -219,9 +222,11 @@ def add_age_sex_to_processed(processed_file: str, combined_df: pd.DataFrame, out
         image_id = str(row.get('image_id', '')).strip()
         
         if image_id in lookup:
-            age_cat, sex = lookup[image_id]
+            age_cat, sex,age_int,part = lookup[image_id]
             df.at[idx, 'age'] = age_cat
             df.at[idx, 'sex'] = sex
+            df.at[idx,"age_int"]=age_int
+            df.at[idx, 'part'] = part
             matched_count += 1
             
             if age_cat:
