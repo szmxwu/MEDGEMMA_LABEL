@@ -1126,7 +1126,6 @@
                                    data-sample-id="${escapeHtml(sampleId)}"
                                    data-filename="${escapeHtml(filename)}"
                                    data-key="${escapeHtml(name)}"
-                                   onclick="markAsReviewed('${escapeJs(sampleId)}', '${escapeJs(filename)}')"
                                    onchange="handleRadioChange(this)">
                             <label for="${name}_${opt}">${opt}</label>
                         </div>
@@ -1141,69 +1140,45 @@
             return generateRadioGroup(options, currentValue, name, type, sampleId, filename, isModified, isReviewed);
         }
         
-        // 标记为已复核
+        // 标记为已复核（简化版：Last Write Wins）
         async function markAsReviewed(imageId, filename) {
             const key = `${imageId}_${filename}`;
-            if (!reviewedData.has(key)) {
-                reviewedData.add(key);
-                const sample = allSamples.find(s => s.image_id === imageId);
-                const img = sample?.images.find(i => i.filename === filename);
-                if (img) {
-                    img.reviewed = true;
-                }
-                updateStats();
-                
-                // 更新UI
-                const card = document.querySelector(`[data-key="${key}"]`);
-                if (card) {
-                    // 给所有 radio input 添加 reviewed 类
-                    const radios = card.querySelectorAll('input[type="radio"]');
-                    radios.forEach(r => r.classList.add('reviewed'));
-                    
-                    // 更新badge
-                    const filenameDiv = card.querySelector('.image-filename');
-                    if (filenameDiv) {
-                        // 移除需复核badge
-                        const reviewBadge = filenameDiv.querySelector('.review-badge');
-                        if (reviewBadge) reviewBadge.remove();
-                        
-                        // 添加已复核badge
-                        if (!filenameDiv.querySelector('.reviewed-badge')) {
-                            const badge = document.createElement('span');
-                            badge.className = 'reviewed-badge ms-2';
-                            badge.innerHTML = '<i class="fa fa-check"></i> 已复核';
-                            filenameDiv.appendChild(badge);
-                        }
+            if (reviewedData.has(key)) return { success: true }; // 已复核，直接返回
+            
+            reviewedData.add(key);
+            const sample = allSamples.find(s => s.image_id === imageId);
+            const img = sample?.images.find(i => i.filename === filename);
+            if (img) img.reviewed = true;
+            updateStats();
+            
+            // 更新UI
+            const card = document.querySelector(`[data-key="${key}"]`);
+            if (card) {
+                card.querySelectorAll('input[type="radio"]').forEach(r => r.classList.add('reviewed'));
+                const filenameDiv = card.querySelector('.image-filename');
+                if (filenameDiv) {
+                    filenameDiv.querySelector('.review-badge')?.remove();
+                    if (!filenameDiv.querySelector('.reviewed-badge')) {
+                        const badge = document.createElement('span');
+                        badge.className = 'reviewed-badge ms-2';
+                        badge.innerHTML = '<i class="fa fa-check"></i> 已复核';
+                        filenameDiv.appendChild(badge);
                     }
-                }
-                
-                // 更新样本header
-                updateSampleHeader(imageId);
-
-                // 注意：不再自动刷新页面，等翻页时再刷新
-                // 这样可以避免误操作丢失当前图片焦点
-
-                try {
-                    const response = await fetch('/api/review', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ image_id: imageId, filename: filename, reviewed: true })
-                    });
-                    const result = await response.json();
-                    if (!result.success) {
-                        throw new Error(result.message);
-                    }
-                } catch (error) {
-                    reviewedData.delete(key);
-                    if (img) {
-                        img.reviewed = false;
-                    }
-                    updateStats();
-                    renderSamples();
-                    renderPagination();
-                    showToast('复核保存失败: ' + error.message, 'error');
                 }
             }
+            updateSampleHeader(imageId);
+            
+            // 后台保存（不检查冲突）
+            try {
+                await fetch('/api/review', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ image_id: imageId, filename: filename, reviewed: true })
+                });
+            } catch (e) {
+                console.error('复核保存失败:', e);
+            }
+            return { success: true };
         }
 
         function bulkReviewCurrentPage() {
@@ -1418,20 +1393,13 @@
                 updateProgressBar();
             });
             
-            // 2. 后台异步保存（带冲突检测）
-            // 获取客户端当前修改时间（用于并发检测）
-            const clientModifiedAt = img?.modified_at || '';
+            // 2. 标记为已复核（简化：Last Write Wins）
+            await markAsReviewed(imageId, filename);
             
-            // 更新状态为保存中
-            if (statusEl) {
-                statusEl.innerHTML = '<i class="fa fa-spinner fa-spin"></i>';
-            }
+            // 3. 保存修改（不检查冲突，直接覆盖）
+            if (statusEl) statusEl.innerHTML = '<i class="fa fa-spinner fa-spin"></i>';
             
-            const data = { 
-                image_id: imageId, 
-                filename: filename,
-                client_modified_at: clientModifiedAt
-            };
+            const data = { image_id: imageId, filename: filename };
             data[type] = newValue;
             
             fetch('/api/save', {
@@ -1441,22 +1409,7 @@
             })
             .then(async response => {
                 const result = await response.json();
-                
-                if (response.status === 409 && result.conflict) {
-                    // 冲突！需要处理
-                    handleConflict(imageId, filename, type, result.conflict_fields, key);
-                    if (statusEl) {
-                        statusEl.innerHTML = '<i class="fa fa-exclamation-triangle"></i> 冲突';
-                        statusEl.className = 'save-status error';
-                    }
-                    return;
-                }
-                
                 if (result.success) {
-                    // 保存成功，更新服务器返回的修改时间
-                    if (img && result.modified_at) {
-                        img.modified_at = result.modified_at;
-                    }
                     if (statusEl) {
                         statusEl.innerHTML = '<i class="fa fa-check"></i>';
                         setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 2000);
@@ -1472,50 +1425,6 @@
                     statusEl.className = 'save-status error';
                 }
             });
-        }
-        
-        // 处理保存冲突
-        function handleConflict(imageId, filename, changedType, conflictFields, radioKey) {
-            const sample = allSamples.find(s => s.image_id === imageId);
-            const img = sample?.images.find(i => i.filename === filename);
-            if (!img) return;
-            
-            // 构建冲突提示信息
-            let conflictMsg = '该记录已被其他用户修改：\n\n';
-            let hasCurrentFieldConflict = false;
-            
-            conflictFields.forEach(field => {
-                const fieldName = field.field === 'final_projection' ? '体位' : '方位';
-                conflictMsg += `• ${fieldName} 被改为：${field.server_value}\n`;
-                conflictMsg += `  你的修改：${field.client_value}\n\n`;
-                
-                // 检查是否是当前用户修改的字段
-                if ((field.field === 'final_projection' && changedType === 'projection') ||
-                    (field.field === 'final_orientation' && changedType === 'orientation')) {
-                    hasCurrentFieldConflict = true;
-                }
-            });
-            
-            conflictMsg += '点击确定接受服务器版本并刷新';
-            
-            // 显示冲突提示
-            showToast('保存冲突：该记录已被其他用户修改', 'error');
-            
-            // 延迟弹出确认框
-            setTimeout(() => {
-                if (confirm(conflictMsg)) {
-                    // 用户选择接受服务器版本
-                    conflictFields.forEach(field => {
-                        if (field.field === 'final_projection') {
-                            img.final_projection = field.server_value;
-                        } else if (field.field === 'final_orientation') {
-                            img.final_orientation = field.server_value;
-                        }
-                    });
-                    // 重新渲染
-                    renderSamples();
-                }
-            }, 100);
         }
         
         // 渲染分页
@@ -1702,20 +1611,30 @@
         // 导出结果
         async function exportResults() {
             try {
-                const response = await fetch('/api/export');
-                const result = await response.json();
+                const filename = `review_results_${new Date().toISOString().slice(0,10)}.xlsx`;
                 
-                const blob = new Blob([JSON.stringify(result, null, 2)], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `review_results_${new Date().toISOString().slice(0,10)}.json`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
+                const response = await fetch('/api/export/excel', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filename: filename })
+                });
                 
-                showToast('✓ 结果已导出');
+                if (response.ok) {
+                    // 下载文件
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                    showToast('✓ Excel已导出并下载');
+                } else {
+                    const result = await response.json();
+                    showToast('导出失败: ' + (result.message || '未知错误'), 'error');
+                }
             } catch (error) {
                 showToast('导出失败: ' + error.message, 'error');
             }
